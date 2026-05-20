@@ -2,16 +2,19 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -22,18 +25,18 @@ type KeyPool struct {
 	keys         []string
 	cooldowns    []time.Time
 	disabled     []bool
-	requestCounts []int
+	requestHistory [][]time.Time // timestamps of requests in the last 60s per key
 	lastUsed     []time.Time
 	mu           sync.Mutex
 }
 
 func NewKeyPool(keys []string) *KeyPool {
 	return &KeyPool{
-		keys:         keys,
-		cooldowns:    make([]time.Time, len(keys)),
-		disabled:     make([]bool, len(keys)),
-		requestCounts: make([]int, len(keys)),
-		lastUsed:     make([]time.Time, len(keys)),
+		keys:           keys,
+		cooldowns:      make([]time.Time, len(keys)),
+		disabled:       make([]bool, len(keys)),
+		requestHistory: make([][]time.Time, len(keys)),
+		lastUsed:       make([]time.Time, len(keys)),
 	}
 }
 
@@ -64,14 +67,34 @@ func (p *KeyPool) Next() (int, string, bool) {
 	for i := 0; i < n; i++ {
 		idx := (start + i) % n
 		if !p.disabled[idx] && time.Now().After(p.cooldowns[idx]) {
-			// Reset request count if last used was > 60 seconds ago
-			if time.Since(p.lastUsed[idx]) > 60*time.Second {
-				p.requestCounts[idx] = 0
-			}
 			return idx, p.keys[idx], true
 		}
 	}
 	return -1, "", false
+}
+
+// requestsInLastMinute returns the number of requests made by a key in the last 60 seconds
+func (p *KeyPool) requestsInLastMinute(idx int) int {
+	cutoff := time.Now().Add(-60 * time.Second)
+	count := 0
+	for _, t := range p.requestHistory[idx] {
+		if t.After(cutoff) {
+			count++
+		}
+	}
+	return count
+}
+
+// cleanupOldRequests removes request timestamps older than 60 seconds
+func (p *KeyPool) cleanupOldRequests(idx int) {
+	cutoff := time.Now().Add(-60 * time.Second)
+	var filtered []time.Time
+	for _, t := range p.requestHistory[idx] {
+		if t.After(cutoff) {
+			filtered = append(filtered, t)
+		}
+	}
+	p.requestHistory[idx] = filtered
 }
 
 func (p *KeyPool) Cooldown(idx int, d time.Duration) {
@@ -101,20 +124,25 @@ func (p *KeyPool) ActiveCount() int {
 	return n
 }
 
+func (p *KeyPool) keyStatusLabel(i int, now time.Time) string {
+	cd := p.cooldowns[i]
+	switch {
+	case p.disabled[i]:
+		return "disabled"
+	case now.After(cd):
+		return "ready"
+	default:
+		return fmt.Sprintf("cooling(%.0fs)", cd.Sub(now).Seconds())
+	}
+}
+
 func (p *KeyPool) Status() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := time.Now()
 	parts := make([]string, len(p.keys))
-	for i, cd := range p.cooldowns {
-		switch {
-		case p.disabled[i]:
-			parts[i] = fmt.Sprintf("[%d]:disabled", i)
-		case now.After(cd):
-			parts[i] = fmt.Sprintf("[%d]:ready", i)
-		default:
-			parts[i] = fmt.Sprintf("[%d]:cooling(%.0fs)", i, cd.Sub(now).Seconds())
-		}
+	for i := range p.keys {
+		parts[i] = fmt.Sprintf("[%d]:%s", i, p.keyStatusLabel(i, now))
 	}
 	return strings.Join(parts, " ")
 }
@@ -126,39 +154,29 @@ func (p *KeyPool) GetKeyDetails() []map[string]interface{} {
 	now := time.Now()
 	details := make([]map[string]interface{}, len(p.keys))
 	for i := range p.keys {
+		p.cleanupOldRequests(i)
 		keyDetail := map[string]interface{}{
-			"index":          i,
-			"key":            p.keys[i],
-			"disabled":       p.disabled[i],
-			"request_count":  p.requestCounts[i],
-			"last_used":      p.lastUsed[i].Format(time.RFC3339),
-			"cooldown_until": p.cooldowns[i].Format(time.RFC3339),
+			"index":               i,
+			"key":                 p.keys[i],
+			"disabled":            p.disabled[i],
+			"requests_per_minute": p.requestsInLastMinute(i),
+			"last_used":           p.lastUsed[i].Format(time.RFC3339),
+			"cooldown_until":      p.cooldowns[i].Format(time.RFC3339),
 		}
 
 		// Determine label
-		if p.disabled[i] {
-			keyDetail["status"] = "disabled"
-		} else if now.After(p.cooldowns[i]) {
-			if time.Since(p.lastUsed[i]) > 60*time.Second {
-				keyDetail["status"] = "usable"
-			} else if p.requestCounts[i] >= 40 {
-				keyDetail["status"] = "cooling down"
-			} else {
-				keyDetail["status"] = "ready"
-			}
-		} else {
-			keyDetail["status"] = fmt.Sprintf("cooling(%.0fs)", p.cooldowns[i].Sub(now).Seconds())
-		}
+		keyDetail["status"] = p.keyStatusLabel(i, now)
 		details[i] = keyDetail
 	}
 	return details
 }
 
-// IncrementRequestCount increments the request count for a key and updates its lastUsed timestamp
+// IncrementRequestCount records a request timestamp for a key and updates its lastUsed timestamp
 func (p *KeyPool) IncrementRequestCount(idx int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.requestCounts[idx]++
+	p.cleanupOldRequests(idx)
+	p.requestHistory[idx] = append(p.requestHistory[idx], time.Now())
 	p.lastUsed[idx] = time.Now()
 }
 
@@ -264,7 +282,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	client := &http.Client{
-		Timeout: 0,
+		Timeout: 120 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -378,6 +396,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Body.Close()
 
+		pool.IncrementRequestCount(idx)
 		log.Printf("✅ %s %s → %d (key[%d], attempt %d)", r.Method, target, resp.StatusCode, idx, attempt+1)
 		return
 	}
@@ -402,7 +421,13 @@ func watchEnvFile(state *ServerState, stop <-chan struct{}) {
 			return
 		case <-ticker.C:
 			info, err := os.Stat(".env")
-			if err != nil || !info.ModTime().After(lastMod) {
+			if err != nil {
+				if os.IsNotExist(err) {
+					log.Printf("⚠️ .env file deleted — keeping current config")
+				}
+				continue
+			}
+			if !info.ModTime().After(lastMod) {
 				continue
 			}
 			lastMod = info.ModTime()
@@ -433,8 +458,27 @@ func main() {
 	stop := make(chan struct{})
 	go watchEnvFile(state, stop)
 
-	log.Printf("⚡ Alvus :%s → %s (%d keys)", cfg.Port, cfg.TargetBase, len(pool.keys))	
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, state.mux))
+	// Graceful shutdown on SIGINT/SIGTERM
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	server := &http.Server{Addr: ":" + cfg.Port, Handler: state.mux}
+
+	go func() {
+		<-sigCh
+		log.Printf("🛑 Shutting down gracefully...")
+		close(stop)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("❌ Shutdown error: %v", err)
+		}
+	}()
+
+	log.Printf("⚡ Alvus :%s → %s (%d keys)", cfg.Port, cfg.TargetBase, len(pool.keys))
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatalf("❌ Server error: %v", err)
+	}
 }
 
 // ── .env Loader ───────────────────────────────

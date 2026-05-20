@@ -73,7 +73,7 @@ If it speaks OpenAI-compatible API, it works with Alvus.
 | ⏱️ **Retry-After support**     | Respects upstream `Retry-After` headers — no blind fixed waits              |
 | 🔑 **Auto-disable on 401/403** | Invalid or revoked keys are permanently removed from the pool               |
 | 📡 **Streaming passthrough**   | SSE and chunked responses piped with zero buffering overhead                |
-| ❤️ **Health endpoint**         | `GET /health` shows live key status and cooldown timers                     |
+| ❤️ **Health endpoint**         | `GET /health` shows live key status, cooldown timers, and requests/minute   |
 | 🪶 **Zero dependencies**       | Pure Go stdlib. One file. One binary                                        |
 | 🔧 **`.env` support**          | Built-in parser — no `godotenv`, no extras                                  |
 | 🖥️ **Runs anywhere**           | linux/amd64, arm64, arm, **386** — including Pi Zero and older x86 hardware |
@@ -234,7 +234,7 @@ curl http://localhost:3000/health
       "index": 0,
       "key": "nvapi-xxxxxxxxxxxx",
       "status": "ready",
-      "request_count": 15,
+      "requests_per_minute": 15,
       "last_used": "2023-11-15T14:30:00Z",
       "cooldown_until": "2023-11-15T14:29:00Z"
     },
@@ -242,7 +242,7 @@ curl http://localhost:3000/health
       "index": 1,
       "key": "nvapi-yyyyyyyyyyyy",
       "status": "cooling(42s)",
-      "request_count": 40,
+      "requests_per_minute": 40,
       "last_used": "2023-11-15T14:31:00Z",
       "cooldown_until": "2023-11-15T14:32:00Z"
     }
@@ -284,6 +284,9 @@ ExecStart=/usr/local/bin/alvus
 WorkingDirectory=/etc/alvus
 Restart=on-failure
 RestartSec=5
+# Graceful shutdown on stop/restart
+KillSignal=SIGTERM
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -295,6 +298,8 @@ Put your `.env` in `/etc/alvus/`. Reload and start:
 sudo systemctl daemon-reload
 sudo systemctl enable --now alvus
 ```
+
+Alvus handles `SIGINT` and `SIGTERM` gracefully, allowing in-flight requests to complete before shutting down (with a 5-second timeout).
 
 ---
 
