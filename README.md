@@ -142,9 +142,18 @@ Real environment variables take precedence over `.env` — useful for systemd or
 ./alvus
 ```
 
+You can also use command-line flags to control server access:
+
+- `--local`: Binds to `127.0.0.1` (only accessible from the device it's running on).
+- `--network-only`: Binds to `0.0.0.0` (accessible via LAN — perfect for home servers).
+
+```bash
+# Example for a home server
+./alvus --network-only
 ```
-⚡ Alvus started on :3000
-   Target  : https://integrate.api.nvidia.com/v1
+
+```
+⚡ Alvus 0.0.0.0:3000 → https://integrate.api.nvidia.com/v1
    Keys    : 3 loaded
    Cooldown: 60s per key on 429/502/503
 ```
