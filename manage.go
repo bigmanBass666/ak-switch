@@ -48,7 +48,7 @@ type ManagedInstance struct {
 // writeEnvFile generates and writes the .env file for a managed instance.
 func (m *ManagedInstance) writeEnvFile(cfg ProviderDef) error {
 	if err := os.MkdirAll(m.Dir, 0755); err != nil {
-		return fmt.Errorf("create dir %q: %v", m.Dir, err)
+		return fmt.Errorf("create dir %q: %w", m.Dir, err)
 	}
 	lines := []string{
 		fmt.Sprintf("PORT=%d", m.Port),
@@ -62,7 +62,7 @@ func (m *ManagedInstance) writeEnvFile(cfg ProviderDef) error {
 	content := strings.Join(lines, "\n") + "\n"
 	envPath := filepath.Join(m.Dir, ".env")
 	if err := os.WriteFile(envPath, []byte(content), 0600); err != nil {
-		return fmt.Errorf("write .env: %v", err)
+		return fmt.Errorf("write .env: %w", err)
 	}
 	return nil
 }
@@ -75,7 +75,7 @@ func (m *ManagedInstance) Start(binary string) error {
 	}
 	absDir, err := filepath.Abs(m.Dir)
 	if err != nil {
-		return fmt.Errorf("bad dir %q: %v", m.Dir, err)
+		return fmt.Errorf("bad dir %q: %w", m.Dir, err)
 	}
 	if _, err := os.Stat(filepath.Join(absDir, ".env")); os.IsNotExist(err) {
 		return fmt.Errorf(".env not found in %s — writeEnvFile() was not called", absDir)
@@ -86,15 +86,15 @@ func (m *ManagedInstance) Start(binary string) error {
 	// Capture both stdout and stderr in real-time
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("stdout pipe: %v", err)
+		return fmt.Errorf("stdout pipe: %w", err)
 	}
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("stderr pipe: %v", err)
+		return fmt.Errorf("stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start %q: %v", m.Name, err)
+		return fmt.Errorf("start %q: %w", m.Name, err)
 	}
 	m.Cmd = cmd
 	m.Running = true
@@ -102,16 +102,24 @@ func (m *ManagedInstance) Start(binary string) error {
 	// Real-time stdout reader
 	go func() {
 		scanner := bufio.NewScanner(stdoutPipe)
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 		for scanner.Scan() {
 			log.Printf("[%s] %s", m.Name, scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("⚠️ [%s] stdout scanner error: %v", m.Name, err)
 		}
 	}()
 
 	// Real-time stderr reader
 	go func() {
 		scanner := bufio.NewScanner(stderrPipe)
+		scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 		for scanner.Scan() {
 			log.Printf("⚠️ [%s] %s", m.Name, scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("⚠️ [%s] stderr scanner error: %v", m.Name, err)
 		}
 	}()
 
@@ -184,7 +192,7 @@ func detectOldFormat(data []byte) error {
 func LoadManagerConfig(path string) (ManageConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ManageConfig{}, fmt.Errorf("读取 %s 失败: %v", path, err)
+		return ManageConfig{}, fmt.Errorf("读取 %s 失败: %w", path, err)
 	}
 
 	if err := detectOldFormat(data); err != nil {
@@ -193,7 +201,7 @@ func LoadManagerConfig(path string) (ManageConfig, error) {
 
 	var cfg ManageConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return ManageConfig{}, fmt.Errorf("解析 %s 失败: %v", path, err)
+		return ManageConfig{}, fmt.Errorf("解析 %s 失败: %w", path, err)
 	}
 
 	usedPorts := make(map[int]string)
@@ -302,12 +310,12 @@ func (m *Manager) WatchAndRestart(stop <-chan struct{}) {
 func openLogFile() (*os.File, error) {
 	logDir := "logs"
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return nil, fmt.Errorf("create log dir: %v", err)
+		return nil, fmt.Errorf("create log dir: %w", err)
 	}
 	path := filepath.Join(logDir, "alvus-manage.log")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return nil, fmt.Errorf("open log file: %v", err)
+		return nil, fmt.Errorf("open log file: %w", err)
 	}
 	return f, nil
 }
