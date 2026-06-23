@@ -1,8 +1,9 @@
-package main
+﻿package main
 
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
 	"flag"
@@ -376,16 +377,20 @@ type ConfigPayload struct {
 func (s *ServerState) configHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	cfg := s.cfg
-	keys := s.pool.keys
+	pool := s.pool
 	s.mu.RUnlock()
 
 	if r.Method == http.MethodGet {
-		w.Header().Set("Content-Type", "application/json")
+		pool.mu.Lock()
+		keys := make([]string, len(pool.keys))
+		copy(keys, pool.keys)
+		pool.mu.Unlock()
+
 		maskedKeys := make([]string, len(keys))
 		for i, k := range keys {
 			maskedKeys[i] = maskKey(k)
 		}
-		json.NewEncoder(w).Encode(ConfigPayload{
+		s.respondJSON(w, http.StatusOK, ConfigPayload{
 			TargetBase: cfg.TargetBase,
 			GenaiBase:  cfg.GenaiBase,
 			Keys:       maskedKeys,
@@ -394,7 +399,7 @@ func (s *ServerState) configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		if s.cfg.AdminToken != "" && r.Header.Get("X-Admin-Token") != s.cfg.AdminToken {
+		if s.cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(s.cfg.AdminToken)) != 1 {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -464,7 +469,9 @@ func (s *ServerState) configHandler(w http.ResponseWriter, r *http.Request) {
 		newCfg, newPool, err := reloadConfig()
 		if err != nil {
 			log.Printf("⚠️ Immediate reload failed: %v", err)
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusAccepted)
+			json.NewEncoder(w).Encode(map[string]string{"status": "accepted", "warning": "config saved but reload failed: " + err.Error()})
 			return
 		}
 
@@ -489,7 +496,7 @@ func (s *ServerState) keysHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	// Admin token check for POST and DELETE
-	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && cfg.AdminToken != "" && r.Header.Get("X-Admin-Token") != cfg.AdminToken {
+	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(cfg.AdminToken)) != 1 {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -561,20 +568,23 @@ func filterEmpty(ss []string) []string {
 	return filtered
 }
 
+func (s *ServerState) respondJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(data)
+}
+
 func (s *ServerState) healthHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	pool := s.pool
 	s.mu.RUnlock()
-	w.Header().Set("Content-Type", "application/json")
 
 	details := pool.GetKeyDetails()
-	jsonDetails, err := json.Marshal(details)
-	if err != nil {
-		http.Error(w, "failed to marshal key details", http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Fprintf(w, `{"status":"ok","keys":%d,"details":%s}`, len(pool.keys), jsonDetails)
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"keys":    len(details),
+		"details": details,
+	})
 }
 
 func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
@@ -586,6 +596,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	var bodyBytes []byte
 	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
 		var err error
 		bodyBytes, err = io.ReadAll(r.Body)
 		r.Body.Close()
@@ -681,7 +692,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			log.Printf("⚠️ Upstream %d: %s (Retrying...)", resp.StatusCode, body)
-			resp.Body = io.NopCloser(bytes.NewReader(body))
+
 			continue
 		}
 
@@ -693,7 +704,9 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 			for {
 				n, rerr := resp.Body.Read(buf)
 				if n > 0 {
-					w.Write(buf[:n])
+					if _, werr := w.Write(buf[:n]); werr != nil {
+						break
+					}
 					f.Flush()
 				}
 				if rerr != nil {
@@ -715,7 +728,6 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *ServerState) logsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
 	usageMu.Lock()
 	masked := make([]LogEntry, len(usageLogs))
 	for i, entry := range usageLogs {
@@ -729,9 +741,8 @@ func (s *ServerState) logsHandler(w http.ResponseWriter, r *http.Request) {
 			RequestBodySize: entry.RequestBodySize,
 		}
 	}
-	data, _ := json.Marshal(masked)
 	usageMu.Unlock()
-	w.Write(data)
+	s.respondJSON(w, http.StatusOK, masked)
 }
 
 func (s *ServerState) dashboardHandler(w http.ResponseWriter, r *http.Request) {
@@ -750,9 +761,7 @@ func (s *ServerState) clearHandler(w http.ResponseWriter, r *http.Request) {
 	usageMu.Lock()
 	usageLogs = []LogEntry{}
 	usageMu.Unlock()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"status": "cleared"})
+	s.respondJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
 }
 
 // ── .env Watcher ──────────────────────────────
@@ -894,3 +903,6 @@ func loadDotEnv(filename string) {
 		}
 	}
 }
+
+
+

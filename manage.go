@@ -148,6 +148,7 @@ func (m *ManagedInstance) Start(binary string, tag string) error {
 		err := cmd.Wait()
 		m.mu.Lock()
 		m.Running = false
+		m.Cmd = nil
 		m.mu.Unlock()
 
 		code := cmd.ProcessState.ExitCode()
@@ -164,14 +165,30 @@ func (m *ManagedInstance) Start(binary string, tag string) error {
 
 func (m *ManagedInstance) Stop() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if !m.Running || m.Cmd == nil || m.Cmd.Process == nil {
+		m.mu.Unlock()
 		return
 	}
 	pid := m.Cmd.Process.Pid
 	log.Printf("🛑 [%s] stopping (PID %d)...", m.Name, pid)
 	m.Cmd.Process.Kill()
+
+	// 等待进程退出，最多 5 秒
+	done := make(chan struct{})
+	go func() {
+		m.Cmd.Wait()
+		close(done)
+	}()
+	m.mu.Unlock() // 先解锁，避免 Wait 期间死锁
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		log.Printf("⚠️ [%s] 进程 %d 未在 5s 内退出", m.Name, pid)
+	}
+	m.mu.Lock()
 	m.Running = false
+	m.Cmd = nil
+	m.mu.Unlock()
 	log.Printf("🛑 [%s] stopped", m.Name)
 }
 
@@ -331,7 +348,9 @@ func (m *Manager) WatchAndRestart(stop <-chan struct{}) {
 						resp.Body.Close()
 						m.healthFailures[inst.Name] = 0
 					} else {
-						if resp != nil {
+						if err != nil {
+							log.Printf("⚠️ [%s] 健康检查网络错误: %v", inst.Name, err)
+						} else if resp != nil {
 							resp.Body.Close()
 						}
 						m.healthFailures[inst.Name]++
