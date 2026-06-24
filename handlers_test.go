@@ -344,3 +344,123 @@ func TestClearHandler(t *testing.T) {
 		t.Errorf(`expected status="cleared", got %v`, body["status"])
 	}
 }
+
+// ── Health with AdminToken auth ──────────────────────
+
+func TestHealthHandlerAuth(t *testing.T) {
+	cfg := Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        "0",
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "my-token",
+	}
+	pool := NewKeyPool([]string{"key-a", "key-b", "key-c"})
+	state := newServerState(cfg, pool)
+	alvus := httptest.NewServer(state.mux)
+	defer alvus.Close()
+
+	// Without token → 401
+	resp, err := http.Get(alvus.URL + "/health")
+	if err != nil {
+		t.Fatalf("GET /health (no auth): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// With wrong token → 401
+	req, _ := http.NewRequest("GET", alvus.URL+"/health", nil)
+	req.Header.Set("X-Admin-Token", "wrong-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /health (wrong token): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 with wrong token, got %d", resp.StatusCode)
+	}
+
+	// With correct token → 200
+	req, _ = http.NewRequest("GET", alvus.URL+"/health", nil)
+	req.Header.Set("X-Admin-Token", "my-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /health (correct token): %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["status"] != "ok" {
+		t.Errorf(`expected status="ok", got %v`, body["status"])
+	}
+}
+
+// ── Clear with AdminToken auth ───────────────────────
+
+func TestClearHandlerAuth(t *testing.T) {
+	cfg := Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        "0",
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "my-token",
+	}
+	pool := NewKeyPool([]string{"key-a", "key-b", "key-c"})
+	state := newServerState(cfg, pool)
+	alvus := httptest.NewServer(state.mux)
+	defer alvus.Close()
+
+	// Without token → 401
+	resp, err := http.Post(alvus.URL+"/clear", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("POST /clear (no auth): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// With wrong token → 401
+	req, _ := http.NewRequest("POST", alvus.URL+"/clear", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Token", "wrong-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /clear (wrong token): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 with wrong token, got %d", resp.StatusCode)
+	}
+
+	// With correct token → 200
+	req, _ = http.NewRequest("POST", alvus.URL+"/clear", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Token", "my-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /clear (correct token): %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["status"] != "cleared" {
+		t.Errorf(`expected status="cleared", got %v`, body["status"])
+	}
+}

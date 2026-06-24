@@ -634,3 +634,64 @@ func TestProxyConcurrentWithCooldown(t *testing.T) {
 		t.Fatalf("%d/%d requests failed with 429 cooldown:\n%s", len(failures), concurrency, strings.Join(failures, "\n"))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// 16. Sensitive headers filtered from upstream request
+// ---------------------------------------------------------------------------
+
+func TestProxyFilterSensitiveHeaders(t *testing.T) {
+	var mu sync.Mutex
+	var receivedHeaders http.Header
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		receivedHeaders = r.Header.Clone()
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	alvus := setupAlvus(t, upstream, []string{"test-key"}, 10, 60)
+	defer alvus.Close()
+
+	req, err := http.NewRequest("GET", alvus.URL+"/v1/models", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("X-Admin-Token", "my-secret-admin-token")
+	req.Header.Set("Cookie", "session=abc123")
+	req.Header.Set("Proxy-Authorization", "Basic dXNlcjpwYXNz")
+	req.Header.Set("X-Custom-Header", "should-pass")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /v1/models: %v", err)
+	}
+	resp.Body.Close()
+
+	mu.Lock()
+	headers := receivedHeaders
+	mu.Unlock()
+
+	if headers.Get("X-Admin-Token") != "" {
+		t.Errorf("X-Admin-Token was forwarded to upstream (value=%q)", headers.Get("X-Admin-Token"))
+	}
+	if headers.Get("Cookie") != "" {
+		t.Errorf("Cookie was forwarded to upstream (value=%q)", headers.Get("Cookie"))
+	}
+	if headers.Get("Proxy-Authorization") != "" {
+		t.Errorf("Proxy-Authorization was forwarded to upstream (value=%q)", headers.Get("Proxy-Authorization"))
+	}
+	if h := headers.Get("Authorization"); h == "" {
+		t.Error("Authorization header was stripped entirely")
+	} else if !strings.HasPrefix(h, "Bearer ") {
+		t.Errorf("Authorization header should start with 'Bearer ', got %q", h)
+	}
+	if headers.Get("X-Custom-Header") != "should-pass" {
+		t.Errorf("X-Custom-Header was filtered out (should have passed through)")
+	}
+	if headers.Get("Accept") != "application/json" {
+		t.Errorf("Accept header was filtered out (should have passed through)")
+	}
+}

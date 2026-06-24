@@ -93,6 +93,20 @@ func TestRemoveKeyOutOfRange(t *testing.T) {
 	}
 }
 
+func TestNextEmptyPool(t *testing.T) {
+	p := NewKeyPool([]string{})
+	idx, key, ok := p.Next()
+	if ok {
+		t.Errorf("Next() returned ok=true for empty pool")
+	}
+	if idx != -1 {
+		t.Errorf("Next() returned index %d, want -1", idx)
+	}
+	if key != "" {
+		t.Errorf("Next() returned key=%q, want empty", key)
+	}
+}
+
 func TestActiveCount(t *testing.T) {
 	p := NewKeyPool([]string{"k1", "k2", "k3", "k4"})
 	if n := p.ActiveCount(); n != 4 {
