@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alvus/internal/circuitbreaker"
 	"alvus/internal/config"
 	"alvus/internal/keypool"
 	"alvus/internal/logstore"
@@ -16,6 +17,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -61,6 +63,7 @@ func reloadConfig() (*config.Config, *keypool.KeyPool, error) {
 		"API_KEYS", "KEY", "KEY1", "KEY2", "KEY3", "KEY4", "KEY5", "KEYA", "KEYB",
 		"TARGET_BASE_URL", "GENAI_BASE_URL", "PORT", "COOLDOWN_SEC", "ADMIN_TOKEN",
 		"MAX_RETRIES", "DISABLE_THINKING", "GENAI_MODEL", "LOG_LEVEL",
+		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC", "UPSTREAM_CB_THRESHOLD",
 	} {
 		os.Unsetenv(k)
 	}
@@ -86,10 +89,43 @@ type ServerState struct {
 	startTime       time.Time
 	metrics         *alvusmetrics.Metrics
 	metricsRegistry *prometheus.Registry
+	keyCBs          []*circuitbreaker.KeyCircuitBreaker // per-key circuit breakers
+	upCB            *circuitbreaker.UpstreamCircuitBreaker
 }
 
 func newServerState(cfg *config.Config, pool *keypool.KeyPool) *ServerState {
 	reg, m := alvusmetrics.NewRegistry()
+
+	// Initialize KeyCircuitBreakers (one per key)
+	// Apply CB fallback defaults for inline-constructed configs
+	backoffCapSec := cfg.BackoffCapSec
+	if backoffCapSec <= 0 {
+		backoffCapSec = 120
+	}
+	backoffMult := cfg.BackoffMultiplier
+	if backoffMult <= 0 {
+		backoffMult = 2
+	}
+	upstreamThreshold := cfg.UpstreamCBThreshold
+	if upstreamThreshold <= 0 {
+		upstreamThreshold = 5
+	}
+	cbResetSec := cfg.CBResetSec
+	if cbResetSec <= 0 {
+		cbResetSec = 30
+	}
+	base := time.Duration(cfg.CooldownSec) * time.Second
+	cap_ := time.Duration(backoffCapSec) * time.Second
+	keyCBs := make([]*circuitbreaker.KeyCircuitBreaker, len(pool.Keys()))
+	for i := range keyCBs {
+		keyCBs[i] = circuitbreaker.NewKeyCircuitBreaker(base, cap_, backoffMult)
+	}
+
+	upCB := circuitbreaker.NewUpstreamCircuitBreaker(
+		upstreamThreshold,
+		time.Duration(cbResetSec)*time.Second,
+	)
+
 	s := &ServerState{
 		cfg: cfg, pool: pool, mux: http.NewServeMux(),
 		client: &http.Client{
@@ -107,6 +143,8 @@ func newServerState(cfg *config.Config, pool *keypool.KeyPool) *ServerState {
 		startTime:       time.Now(),
 		metrics:         m,
 		metricsRegistry: reg,
+		keyCBs:          keyCBs,
+		upCB:            upCB,
 	}
 	s.mux.HandleFunc("/health", s.healthHandler)
 	s.mux.HandleFunc("/logs", s.logsHandler)
@@ -193,7 +231,9 @@ func (s *ServerState) configHandler(w http.ResponseWriter, r *http.Request) {
 		for i := range payload.Keys {
 			k := strings.TrimSpace(payload.Keys[i])
 			if k == "" {
-				continue
+				time.Sleep(10 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
+			continue
 			}
 			// If the key is masked (contains "..." or is "****"), try to restore it from the current pool
 			if strings.Contains(k, "...") || k == "****" {
@@ -382,6 +422,8 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg
 	pool := s.pool
 	client := s.client
+	keyCBs := s.keyCBs
+	upCB := s.upCB
 	s.mu.RUnlock()
 
 	start := time.Now()
@@ -424,11 +466,49 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	slog.Info("proxy request", "method", r.Method, "url", target, "bytes", len(bodyBytes))
 
 	for attempt := 0; attempt < cfg.MaxRetries; attempt++ {
+		// 1. Check upstream circuit breaker (fail fast)
+		if !upCB.Allow() {
+			slog.Warn("upstream circuit breaker open, backing off", "attempt", attempt+1, "max", cfg.MaxRetries)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		// 2. Get available key from pool
 		idx, key, ok := pool.Next()
 		if !ok {
 			wait := pool.TimeUntilAvailable()
-			slog.Warn("all keys cooling", "wait", wait.Round(time.Second), "attempt", attempt+1, "max", cfg.MaxRetries)
-			time.Sleep(wait + 500*time.Millisecond)
+			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+			slog.Warn("all keys cooling", "wait", (wait + jitter).Round(time.Second), "attempt", attempt+1, "max", cfg.MaxRetries)
+			time.Sleep(wait + jitter)
+			continue
+		}
+
+		// 3. Check key-level circuit breaker
+		if !keyCBs[idx].Allow() {
+			remaining := keyCBs[idx].CooldownRemaining()
+			if remaining < 0 {
+				// Key is permanently disabled but pool returned it.
+				// Check if ALL keys are permanently disabled.
+				allPerma := true
+				for _, cb := range keyCBs {
+					if cb.State() != circuitbreaker.StatePermanent {
+						allPerma = false
+						break
+					}
+				}
+				if allPerma {
+					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+					recordMetrics("5xx", "")
+					return
+				}
+				// Skip to next key
+				continue
+			}
+			if remaining > 0 {
+				time.Sleep(remaining)
+			} else {
+				time.Sleep(10 * time.Millisecond)
+			}
 			continue
 		}
 
@@ -446,7 +526,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			slog.Warn("key network error", "key_index", idx, "key_name", pool.Name(idx), "error", err)
 			s.metrics.UpstreamErrors.WithLabelValues("network").Inc()
-			pool.Cooldown(idx, time.Duration(cfg.CooldownSec)*time.Second)
+			upCB.RecordFailure()
 			continue
 		}
 
@@ -454,15 +534,25 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		case http.StatusTooManyRequests:
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
+			keyCBs[idx].RecordFailure()
 			cooldown := time.Duration(cfg.CooldownSec) * time.Second
 			if ra := resp.Header.Get("Retry-After"); ra != "" {
 				if secs, err := strconv.Atoi(ra); err == nil {
 					cooldown = time.Duration(secs+2) * time.Second
 				}
 			}
-			slog.Warn("key rate limited", "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cooldown", cooldown, "body", string(body))
-			s.metrics.UpstreamErrors.WithLabelValues("rate_limited").Inc()
 			pool.Cooldown(idx, cooldown)
+			slog.Warn("key rate limited", "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_attempt", keyCBs[idx].Attempt(), "body", string(body))
+			s.metrics.UpstreamErrors.WithLabelValues("rate_limited").Inc()
+			if keyCBs[idx].State() == circuitbreaker.StatePermanent {
+				slog.Warn("key quota exhausted, disabling permanently", "key_index", idx, "key_name", pool.Name(idx))
+				pool.Disable(idx)
+				if pool.ActiveCount() == 0 {
+					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+					recordMetrics("5xx", "")
+					return
+				}
+			}
 			continue
 
 		case http.StatusBadGateway, http.StatusServiceUnavailable:
@@ -470,7 +560,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 			resp.Body.Close()
 			slog.Warn("upstream server error", "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body", string(body))
 			s.metrics.UpstreamErrors.WithLabelValues("server_error").Inc()
-			pool.Cooldown(idx, time.Duration(cfg.CooldownSec)*time.Second)
+			upCB.RecordFailure() // upstream error, not key fault
 			continue
 
 		case http.StatusUnauthorized, http.StatusForbidden:
@@ -479,6 +569,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("key disabled", "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body", string(body))
 			s.metrics.UpstreamErrors.WithLabelValues("auth_rejected").Inc()
 			pool.Disable(idx)
+			keyCBs[idx].RecordPerma("auth_rejected")
 			if pool.ActiveCount() == 0 {
 				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys are invalid or revoked")
 				recordMetrics("5xx", "")
@@ -504,8 +595,13 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 			resp.Body.Close()
 			slog.Warn("upstream error, retrying", "status", resp.StatusCode, "body", string(body))
 			s.metrics.UpstreamErrors.WithLabelValues("server_error").Inc()
+			upCB.RecordFailure()
 			continue
 		}
+
+		// Success (2xx/3xx)
+		keyCBs[idx].RecordSuccess()
+		upCB.RecordSuccess()
 
 		utils.CopyHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
@@ -744,9 +840,11 @@ func watchEnvFile(state *ServerState, stop <-chan struct{}) {
 				if os.IsNotExist(err) {
 					slog.Info("env deleted, keeping current config")
 				}
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 			if !info.ModTime().After(lastMod) {
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 			lastMod = info.ModTime()
@@ -761,6 +859,7 @@ func watchEnvFile(state *ServerState, stop <-chan struct{}) {
 			newCfg, newPool, err := reloadConfig()
 			if err != nil {
 				slog.Error("env reload failed; keeping previous config", "error", err)
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 

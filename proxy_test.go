@@ -948,3 +948,253 @@ func TestProxyError_UpstreamError(t *testing.T) {
 		t.Errorf("expected error.code UPSTREAM_ERROR, got %q", body.Error.Code)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// CB integration tests
+// ---------------------------------------------------------------------------
+
+// TestCB_RateLimitRecovery verifies that 429 triggers exponential backoff
+// but the key recovers after the backoff period and success is possible.
+func TestCB_RateLimitRecovery(t *testing.T) {
+	var mu sync.Mutex
+	callCount := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		count := callCount
+		callCount++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if count < 3 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte(`{"error":"rate limited"}`))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+		}
+	}))
+	defer upstream.Close()
+
+	// 3 keys, CooldownSec=2 so each key gets short pool cooldown
+	cfg := &config.Config{
+		TargetBase:          upstream.URL,
+		GenaiBase:           upstream.URL,
+		Port:                0,
+		MaxRetries:          10,
+		CooldownSec:         2,
+		BackoffCapSec:       120,
+		BackoffMultiplier:   2,
+		CBResetSec:          30,
+		UpstreamCBThreshold: 5,
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
+	state := newServerState(cfg, pool)
+	ts := httptest.NewServer(state.mux)
+	defer ts.Close()
+
+	// WHEN: send a proxy request
+	req, err := http.NewRequest("GET", ts.URL+"/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// THEN: eventually succeed after 429 retries
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK after 429 recovery, got %d", resp.StatusCode)
+	}
+}
+
+// TestCB_QuotaExhausted verifies that repeated 429s escalate to PERMA
+// and return ALL_KEYS_INVALID when all keys are exhausted.
+func TestCB_QuotaExhausted(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":"rate limited"}`))
+	}))
+	defer upstream.Close()
+
+	// 1 key with low BackoffCapSec so it quickly escalates to PERMA
+	cfg := &config.Config{
+		TargetBase:          upstream.URL,
+		GenaiBase:           upstream.URL,
+		Port:                0,
+		MaxRetries:          50,
+		CooldownSec:         1,
+		BackoffCapSec:       5,
+		BackoffMultiplier:   2,
+		CBResetSec:          60,
+		UpstreamCBThreshold: 10,
+	}
+	pool := keypool.NewKeyPool([]string{"single-key"}, nil)
+	state := newServerState(cfg, pool)
+	ts := httptest.NewServer(state.mux)
+	defer ts.Close()
+
+	req, err := http.NewRequest("GET", ts.URL+"/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// THEN: return 503 ALL_KEYS_INVALID
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 Service Unavailable, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON error response: %v", err)
+	}
+	if body.Error.Code != "ALL_KEYS_INVALID" {
+		t.Errorf("expected error.code ALL_KEYS_INVALID, got %q", body.Error.Code)
+	}
+}
+
+// TestCB_UpstreamErrorNoKeyPenalty verifies that 502/503 errors do NOT
+// disable the API key — only the upstream circuit breaker is affected.
+func TestCB_UpstreamErrorNoKeyPenalty(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"upstream down"}`))
+	}))
+	defer upstream.Close()
+
+	// MaxRetries=3, UpstreamCBThreshold high so upstream CB does not open
+	cfg := &config.Config{
+		TargetBase:          upstream.URL,
+		GenaiBase:           upstream.URL,
+		Port:                0,
+		MaxRetries:          3,
+		CooldownSec:         1,
+		BackoffCapSec:       120,
+		BackoffMultiplier:   2,
+		CBResetSec:          300,
+		UpstreamCBThreshold: 10,
+	}
+	pool := keypool.NewKeyPool([]string{"test-key"}, nil)
+	state := newServerState(cfg, pool)
+	ts := httptest.NewServer(state.mux)
+	defer ts.Close()
+
+	// WHEN: send proxy request -> gets 503 -> exhausts retries
+	req, err := http.NewRequest("GET", ts.URL+"/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// THEN: return 503 EXHAUSTED_RETRIES
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 Service Unavailable, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON error response: %v", err)
+	}
+	if body.Error.Code != "EXHAUSTED_RETRIES" {
+		t.Errorf("expected error.code EXHAUSTED_RETRIES, got %q", body.Error.Code)
+	}
+
+	// THEN: key should NOT be disabled (check via health endpoint)
+	healthResp, err := http.Get(ts.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer healthResp.Body.Close()
+
+	var health struct {
+		Details []map[string]interface{} `json:"details"`
+	}
+	if err := json.NewDecoder(healthResp.Body).Decode(&health); err != nil {
+		t.Fatalf("failed to decode health response: %v", err)
+	}
+	if len(health.Details) == 0 {
+		t.Fatal("health endpoint returned no key details")
+	}
+	disabled, ok := health.Details[0]["disabled"].(bool)
+	if !ok {
+		t.Fatal("health detail missing 'disabled' field")
+	}
+	if disabled {
+		t.Error("key should not be disabled after 503 errors (upstream error, not key fault)")
+	}
+}
+
+// TestCB_UpstreamCircuitBreakerOpens verifies that after UPSTREAM_CB_THRESHOLD
+// consecutive 503s, the upstream circuit breaker opens and subsequent retries
+// fail fast without calling the upstream.
+func TestCB_UpstreamCircuitBreakerOpens(t *testing.T) {
+	var mu sync.Mutex
+	upstreamCallCount := 0
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		upstreamCallCount++
+		mu.Unlock()
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(`{"error":"upstream down"}`))
+	}))
+	defer upstream.Close()
+
+	cfg := &config.Config{
+		TargetBase:          upstream.URL,
+		GenaiBase:           upstream.URL,
+		Port:                0,
+		MaxRetries:          10,
+		CooldownSec:         1,
+		BackoffCapSec:       120,
+		BackoffMultiplier:   2,
+		CBResetSec:          60,
+		UpstreamCBThreshold: 3,
+	}
+	pool := keypool.NewKeyPool([]string{"test-key"}, nil)
+	state := newServerState(cfg, pool)
+	ts := httptest.NewServer(state.mux)
+	defer ts.Close()
+
+	req, err := http.NewRequest("GET", ts.URL+"/test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	// THEN: return 503 EXHAUSTED_RETRIES
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.StatusCode)
+	}
+
+	// THEN: upstream should have been called at most UPSTREAM_CB_THRESHOLD times
+	// After 3 failures, CB opens. Remaining 7 retries fail fast without upstream call.
+	mu.Lock()
+	count := upstreamCallCount
+	mu.Unlock()
+	if count > 5 {
+		t.Errorf("expected at most ~3 upstream calls after CB opens, got %d", count)
+	}
+	t.Logf("upstream call count: %d (threshold=3, should be ~3)", count)
+}

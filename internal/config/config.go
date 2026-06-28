@@ -34,15 +34,24 @@ type Config struct {
 	CooldownSec     int      // Cooldown seconds after rate-limit (default 60)
 	Keys            []string // API keys (at least one required)
 	KeyNames        []string // Corresponding key names (empty string if unnamed), same length as Keys
+
+	BackoffCapSec      int     // Key 退避上限(秒)，达到此值自动禁用 (default 120)
+	BackoffMultiplier  float64 // 指数退避倍数 (default 2)
+	CBResetSec         int     // 上游熔断器 OPEN→HALF_OPEN 超时(秒) (default 30)
+	UpstreamCBThreshold int    // 上游熔断器连续失败触发阈值 (default 5)
 }
 
 // DefaultConfig returns a Config with all optional fields set to their defaults.
 func DefaultConfig() *Config {
 	return &Config{
-		Port:        8080,
-		MaxRetries:  3,
-		LogLevel:    "info",
-		CooldownSec: 60,
+		Port:                8080,
+		MaxRetries:          3,
+		LogLevel:            "info",
+		CooldownSec:         60,
+		BackoffCapSec:       120,
+		BackoffMultiplier:   2,
+		CBResetSec:          30,
+		UpstreamCBThreshold: 5,
 	}
 }
 
@@ -63,6 +72,10 @@ func DefaultConfig() *Config {
 //   - KEY (fallback single/comma-separated)
 //   - KEY1, KEY2, ..., KEY5 (fallback individual keys)
 //   - KEYA, KEYB (fallback individual keys)
+//   - BACKOFF_CAP_SEC (int, default 120) — Key 退避上限(秒)
+//   - BACKOFF_MULTIPLIER (float, default 2) — 指数退避倍数
+//   - CB_RESET_SEC (int, default 30) — 上游熔断器 OPEN→HALF_OPEN 超时(秒)
+//   - UPSTREAM_CB_THRESHOLD (int, default 5) — 上游熔断器连续失败触发阈值
 func Load(envPath string) (*Config, error) {
 	if envPath != "" {
 		if err := loadDotEnv(envPath); err != nil {
@@ -128,6 +141,42 @@ func Load(envPath string) (*Config, error) {
 			return nil, fmt.Errorf("invalid COOLDOWN_SEC %q: %w", v, err)
 		}
 		cfg.CooldownSec = cooldown
+	}
+
+	// BackoffCapSec
+	if v := os.Getenv("BACKOFF_CAP_SEC"); v != "" {
+		capSec, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BACKOFF_CAP_SEC %q: %w", v, err)
+		}
+		cfg.BackoffCapSec = capSec
+	}
+
+	// BackoffMultiplier
+	if v := os.Getenv("BACKOFF_MULTIPLIER"); v != "" {
+		mult, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BACKOFF_MULTIPLIER %q: %w", v, err)
+		}
+		cfg.BackoffMultiplier = mult
+	}
+
+	// CBResetSec
+	if v := os.Getenv("CB_RESET_SEC"); v != "" {
+		resetSec, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CB_RESET_SEC %q: %w", v, err)
+		}
+		cfg.CBResetSec = resetSec
+	}
+
+	// UpstreamCBThreshold
+	if v := os.Getenv("UPSTREAM_CB_THRESHOLD"); v != "" {
+		threshold, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid UPSTREAM_CB_THRESHOLD %q: %w", v, err)
+		}
+		cfg.UpstreamCBThreshold = threshold
 	}
 
 	// Keys: API_KEYS is primary, then fallback to KEY, KEY1-KEY5, KEYA, KEYB
@@ -211,6 +260,18 @@ func (c *Config) Validate() error {
 	}
 	if len(c.Keys) == 0 {
 		return fmt.Errorf("at least one API key is required (set API_KEYS)")
+	}
+	if c.BackoffCapSec < 30 {
+		return fmt.Errorf("BACKOFF_CAP_SEC must be at least 30, got %d", c.BackoffCapSec)
+	}
+	if c.BackoffMultiplier < 1 {
+		return fmt.Errorf("BACKOFF_MULTIPLIER must be at least 1, got %f", c.BackoffMultiplier)
+	}
+	if c.CBResetSec < 5 {
+		return fmt.Errorf("CB_RESET_SEC must be at least 5, got %d", c.CBResetSec)
+	}
+	if c.UpstreamCBThreshold < 2 {
+		return fmt.Errorf("UPSTREAM_CB_THRESHOLD must be at least 2, got %d", c.UpstreamCBThreshold)
 	}
 	return nil
 }
@@ -303,6 +364,34 @@ func (c *Config) Diff(other *Config) []ConfigChange {
 			Field:    "COOLDOWN_SEC",
 			OldValue: strconv.Itoa(c.CooldownSec),
 			NewValue: strconv.Itoa(other.CooldownSec),
+		})
+	}
+	if c.BackoffCapSec != other.BackoffCapSec {
+		changes = append(changes, ConfigChange{
+			Field:    "BACKOFF_CAP_SEC",
+			OldValue: strconv.Itoa(c.BackoffCapSec),
+			NewValue: strconv.Itoa(other.BackoffCapSec),
+		})
+	}
+	if c.BackoffMultiplier != other.BackoffMultiplier {
+		changes = append(changes, ConfigChange{
+			Field:    "BACKOFF_MULTIPLIER",
+			OldValue: strconv.FormatFloat(c.BackoffMultiplier, 'g', -1, 64),
+			NewValue: strconv.FormatFloat(other.BackoffMultiplier, 'g', -1, 64),
+		})
+	}
+	if c.CBResetSec != other.CBResetSec {
+		changes = append(changes, ConfigChange{
+			Field:    "CB_RESET_SEC",
+			OldValue: strconv.Itoa(c.CBResetSec),
+			NewValue: strconv.Itoa(other.CBResetSec),
+		})
+	}
+	if c.UpstreamCBThreshold != other.UpstreamCBThreshold {
+		changes = append(changes, ConfigChange{
+			Field:    "UPSTREAM_CB_THRESHOLD",
+			OldValue: strconv.Itoa(c.UpstreamCBThreshold),
+			NewValue: strconv.Itoa(other.UpstreamCBThreshold),
 		})
 	}
 	// Keys: compare as masked strings (with names)

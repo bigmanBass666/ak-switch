@@ -30,20 +30,29 @@
 | `internal/config/config_test.go` | 23 | 单元测试 |
 | `internal/keypool/keypool_test.go` | 12 | 单元测试 |
 | `internal/logstore/logstore_test.go` | 4 | 单元测试 |
+| `internal/circuitbreaker/key_test.go` | 10 | 单元测试 |
+| `internal/circuitbreaker/upstream_test.go` | 9 | 单元测试 |
 | `handlers_test.go` | 14 | Handler 测试 |
 | `logstore_test.go` | 4 | Handler 测试 |
-| `proxy_test.go` | 21 | **集成验收测试** |
+| `proxy_test.go` | 25 | **集成验收测试** |
 | `integration_test.go` | 4 | **集成测试** |
 | `metrics_verification_test.go` | 6 | **集成验收测试** |
-| **总计** | **88** | |
+| **总计** | **111** | |
 
 ## 🔜 短期计划（待讨论决策）
 
 以下为已完成功能基础上，近期可推进的方向，等待讨论确认顺序与范围。
 
-### B. 智能重试与退避
+### B. 智能重试与退避 ✅
 
-**指数退避 + jitter**：当前 `allkeysCooldown` 用固定 sleep(`wait + 500ms`)，冷启动时所有 Key 同时醒来同时被打。改为指数退避（base delay + cap）+ 随机 jitter，让 Key 恢复时间分散，减少并发冲突峰值。
+**两层熔断器**（`internal/circuitbreaker/`）：
+- **Key 级熔断器**（KeyCircuitBreaker）— 三态（CLOSED/OPEN/PERMA），429 时指数退避（`base × multiplier^attempt + jitter`），退避达 `BACKOFF_CAP_SEC` 自动 PERMA（日额度耗尽检测），401/403 直接 PERMA，成功恢复后归零
+- **上游级熔断器**（UpstreamCircuitBreaker）— 三态（CLOSED/OPEN/HALF_OPEN），502/503 连续达阈值触发熔断，超时后进入 HALF_OPEN 单次探测，探测成功恢复/失败重熔
+- **502/503/网络错误不惩罚 Key** — Key 是无辜的，只有上游熔断器记录故障
+- **全部冷却时加随机 jitter** — 替代固定 `wait + 500ms`
+- **上游熔断 OPEN 时 fail fast** — 跳过发请求，直接退避等待
+- 新增配置项：`BACKOFF_CAP_SEC` / `BACKOFF_MULTIPLIER` / `CB_RESET_SEC` / `UPSTREAM_CB_THRESHOLD`
+- 4 个集成验收测试覆盖所有错误分支
 
 ### C. 启动配置友好校验
 

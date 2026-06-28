@@ -13,6 +13,8 @@ func resetEnv() {
 		"DISABLE_THINKING", "GENAI_MODEL", "MAX_RETRIES", "LOG_LEVEL",
 		"COOLDOWN_SEC", "API_KEYS", "KEY", "KEY1", "KEY2", "KEY3",
 		"KEY4", "KEY5", "KEYA", "KEYB",
+		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC",
+		"UPSTREAM_CB_THRESHOLD",
 	} {
 		os.Unsetenv(key)
 	}
@@ -159,6 +161,18 @@ func TestLoad_OptionalDefaults(t *testing.T) {
 	}
 	if cfg.AdminToken != "" {
 		t.Errorf("AdminToken default = %q, want empty", cfg.AdminToken)
+	}
+	if cfg.BackoffCapSec != 120 {
+		t.Errorf("BackoffCapSec default = %d, want 120", cfg.BackoffCapSec)
+	}
+	if cfg.BackoffMultiplier != 2 {
+		t.Errorf("BackoffMultiplier default = %g, want 2", cfg.BackoffMultiplier)
+	}
+	if cfg.CBResetSec != 30 {
+		t.Errorf("CBResetSec default = %d, want 30", cfg.CBResetSec)
+	}
+	if cfg.UpstreamCBThreshold != 5 {
+		t.Errorf("UpstreamCBThreshold default = %d, want 5", cfg.UpstreamCBThreshold)
 	}
 }
 
@@ -313,6 +327,31 @@ func TestValidate_RequiredFields(t *testing.T) {
 		{name: "empty keys", modify: func(cfg *Config) { cfg.Keys = nil }},
 		{name: "empty target base", modify: func(cfg *Config) { cfg.TargetBase = "" }},
 		{name: "empty genai base", modify: func(cfg *Config) { cfg.GenaiBase = "" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Port = 8080
+			cfg.TargetBase = "https://example.com"
+			cfg.GenaiBase = "https://ai.example.com"
+			cfg.Keys = []string{"nvapi-key1"}
+			tt.modify(cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Error("Validate() expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestValidate_CircuitBreakerFields(t *testing.T) {
+	tests := []struct {
+		name   string
+		modify func(cfg *Config)
+	}{
+		{name: "backoff cap too low", modify: func(cfg *Config) { cfg.BackoffCapSec = 10 }},
+		{name: "backoff multiplier < 1", modify: func(cfg *Config) { cfg.BackoffMultiplier = 0.5 }},
+		{name: "cb reset too low", modify: func(cfg *Config) { cfg.CBResetSec = 1 }},
+		{name: "cb threshold too low", modify: func(cfg *Config) { cfg.UpstreamCBThreshold = 1 }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
