@@ -61,12 +61,13 @@ func reloadConfig() (*config.Config, *keypool.KeyPool, error) {
 // ── Server ────────────────────────────────────
 
 type ServerState struct {
-	mu     sync.RWMutex
-	cfg    *config.Config
-	pool   *keypool.KeyPool
-	mux    *http.ServeMux
-	client *http.Client
-	logs   *logstore.LogStore
+	mu        sync.RWMutex
+	cfg       *config.Config
+	pool      *keypool.KeyPool
+	mux       *http.ServeMux
+	client    *http.Client
+	logs      *logstore.LogStore
+	startTime time.Time
 }
 
 func newServerState(cfg *config.Config, pool *keypool.KeyPool) *ServerState {
@@ -83,7 +84,8 @@ func newServerState(cfg *config.Config, pool *keypool.KeyPool) *ServerState {
 				return http.ErrUseLastResponse
 			},
 		},
-		logs: logstore.New(1000),
+		logs:      logstore.New(1000),
+		startTime: time.Now(),
 	}
 	s.mux.HandleFunc("/health", s.healthHandler)
 	s.mux.HandleFunc("/logs", s.logsHandler)
@@ -91,6 +93,11 @@ func newServerState(cfg *config.Config, pool *keypool.KeyPool) *ServerState {
 	s.mux.HandleFunc("/clear", s.clearHandler)
 	s.mux.HandleFunc("/api/config", s.configHandler)
 	s.mux.HandleFunc("/api/keys", s.keysHandler)
+	s.mux.HandleFunc("POST /api/keys/{index}/disable", s.disableKeyHandler)
+	s.mux.HandleFunc("PUT /api/keys/{index}/cooldown", s.cooldownKeyHandler)
+	s.mux.HandleFunc("DELETE /api/keys/{index}", s.deleteKeyHandler)
+	s.mux.HandleFunc("GET /api/stats", s.statsHandler)
+	s.mux.HandleFunc("POST /api/reload", s.reloadHandler)
 	// Block service worker requests to prevent 404s and unnecessary upstream proxying
 	s.mux.HandleFunc("/sw.js", s.swHandler)
 	s.mux.HandleFunc("/", s.proxyHandler)
@@ -395,7 +402,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		resp, err := client.Do(req)
 		if err != nil {
 			slog.Warn("key network error", "key_index", idx, "key_name", pool.Name(idx), "error", err)
-			pool.Cooldown(idx, time.Duration(cfg.CooldownSec)*time.Second)
+			_ = pool.Cooldown(idx, time.Duration(cfg.CooldownSec)*time.Second)
 			continue
 		}
 
@@ -410,14 +417,14 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			slog.Warn("key rate limited", "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cooldown", cooldown, "body", string(body))
-			pool.Cooldown(idx, cooldown)
+			_ = pool.Cooldown(idx, cooldown)
 			continue
 
 		case http.StatusUnauthorized, http.StatusForbidden:
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			slog.Warn("key disabled", "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body", string(body))
-			pool.Disable(idx)
+			_ = pool.Disable(idx)
 			if pool.ActiveCount() == 0 {
 				http.Error(w, "alvus: all keys are invalid or revoked", http.StatusServiceUnavailable)
 				return
@@ -503,6 +510,159 @@ func (s *ServerState) clearHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logs.Clear()
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
+}
+
+// ── Management API Handlers ─────────────────────
+
+func (s *ServerState) adminAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
+	if cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(cfg.AdminToken)) != 1 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+func (s *ServerState) parseKeyIndex(r *http.Request) (int, bool) {
+	raw := r.PathValue("index")
+	idx, err := strconv.Atoi(raw)
+	if err != nil || idx < 1 {
+		return 0, false
+	}
+	return idx - 1, true // convert to 0-based
+}
+
+func (s *ServerState) disableKeyHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	cfg := s.cfg
+	pool := s.pool
+	s.mu.RUnlock()
+
+	if !s.adminAuth(cfg, w, r) {
+		return
+	}
+
+	idx, ok := s.parseKeyIndex(r)
+	if !ok || idx >= len(pool.Keys()) {
+		s.respondJSON(w, http.StatusNotFound, map[string]string{"error": "key not found"})
+		return
+	}
+
+	if err := pool.Disable(idx); err != nil {s.respondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()});return};s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (s *ServerState) cooldownKeyHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	cfg := s.cfg
+	pool := s.pool
+	s.mu.RUnlock()
+
+	if !s.adminAuth(cfg, w, r) {
+		return
+	}
+
+	idx, ok := s.parseKeyIndex(r)
+	if !ok || idx >= len(pool.Keys()) {
+		s.respondJSON(w, http.StatusNotFound, map[string]string{"error": "key not found"})
+		return
+	}
+
+	if err := pool.Cooldown(idx, time.Duration(cfg.CooldownSec)*time.Second); err != nil {
+		s.respondJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (s *ServerState) deleteKeyHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	cfg := s.cfg
+	pool := s.pool
+	s.mu.RUnlock()
+
+	if !s.adminAuth(cfg, w, r) {
+		return
+	}
+
+	idx, ok := s.parseKeyIndex(r)
+	if !ok || idx >= len(pool.Keys()) {
+		s.respondJSON(w, http.StatusNotFound, map[string]string{"error": "key not found"})
+		return
+	}
+
+	pool.RemoveKey(idx)
+	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (s *ServerState) statsHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	pool := s.pool
+	s.mu.RUnlock()
+
+	total := s.logs.Len()
+	entries := s.logs.Snapshot()
+
+	successful := 0
+	failed := 0
+	for _, e := range entries {
+		if e.Status < 400 {
+			successful++
+		} else {
+			failed++
+		}
+	}
+
+	var successRate float64
+	if total > 0 {
+		successRate = float64(successful) / float64(total) * 100
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"total_requests":     total,
+		"successful_requests": successful,
+		"failed_requests":    failed,
+		"success_rate":       fmt.Sprintf("%.2f", successRate),
+		"active_keys":        pool.ActiveCount(),
+		"cooling_keys":       pool.CoolingCount(),
+		"disabled_keys":      pool.DisabledCount(),
+		"uptime_seconds":     time.Since(s.startTime).Seconds(),
+	})
+}
+
+func (s *ServerState) reloadHandler(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+
+	if !s.adminAuth(cfg, w, r) {
+		return
+	}
+
+	s.mu.RLock()
+	oldCfg := s.cfg
+	s.mu.RUnlock()
+
+	newCfg, newPool, err := reloadConfig()
+	if err != nil {
+		slog.Warn("reload failed", "error", err)
+		s.respondJSON(w, http.StatusOK, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	changes := oldCfg.Diff(newCfg)
+	for _, c := range changes {
+		slog.Info("config changed via api reload", "field", c.Field, "old", c.OldValue, "new", c.NewValue)
+	}
+
+	s.mu.Lock()
+	s.cfg = newCfg
+	s.pool = newPool
+	s.mu.Unlock()
+
+	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 // ── .env Watcher ──────────────────────────────

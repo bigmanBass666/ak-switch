@@ -55,3 +55,16 @@ func (ls *LogStore) Clear() {
 	defer ls.mu.Unlock()
 	ls.logs = make([]utils.LogEntry, 0, ls.maxLen)
 }
+
+// CountByStatus returns the number of entries whose status satisfies the predicate.
+func (ls *LogStore) CountByStatus(predicate func(int) bool) int {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+	count := 0
+	for _, entry := range ls.logs {
+		if predicate(entry.Status) {
+			count++
+		}
+	}
+	return count
+}

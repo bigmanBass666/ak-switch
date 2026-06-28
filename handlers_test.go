@@ -469,3 +469,337 @@ func TestClearHandlerAuth(t *testing.T) {
 		t.Errorf(`expected status="cleared", got %v`, body["status"])
 	}
 }
+
+// ── Stats GET ───────────────────────────────────────
+
+func TestStatsHandler(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/api/stats")
+	if err != nil {
+		t.Fatalf("GET /api/stats: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	fields := []string{"total_requests", "successful_requests", "failed_requests", "success_rate", "active_keys", "cooling_keys", "disabled_keys", "uptime_seconds"}
+	for _, f := range fields {
+		if _, ok := body[f]; !ok {
+			t.Errorf("missing field %q in response", f)
+		}
+	}
+}
+
+// ── Disable Key POST ──────────────────────────────────
+
+func TestDisableKeyHandler(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	// 禁用 index=1
+	req, _ := http.NewRequest("POST", alvus.URL+"/api/keys/1/disable", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/keys/1/disable: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["success"] != true {
+		t.Errorf("expected success=true, got %v", body["success"])
+	}
+
+	// GET /api/keys 验证该 key 状态为 "disabled"
+	resp2, err := http.Get(alvus.URL + "/api/keys")
+	if err != nil {
+		t.Fatalf("GET /api/keys: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	var keys []map[string]interface{}
+	if err := json.NewDecoder(resp2.Body).Decode(&keys); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(keys) < 1 {
+		t.Fatal("expected at least 1 key")
+	}
+	status, _ := keys[0]["status"].(string)
+	if status != "disabled" {
+		t.Errorf("expected keys[0] status=disabled, got %q", status)
+	}
+
+	// 越界 index=999 → 404
+	req2, _ := http.NewRequest("POST", alvus.URL+"/api/keys/999/disable", nil)
+	resp3, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("POST /api/keys/999/disable: %v", err)
+	}
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for out-of-range index, got %d", resp3.StatusCode)
+	}
+}
+
+func TestDisableKeyHandlerAuth(t *testing.T) {
+	cfg := &config.Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        19999,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "my-token",
+		Keys:        []string{"key-a", "key-b", "key-c"},
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
+	state := newServerState(cfg, pool)
+	alvus := httptest.NewServer(state.mux)
+	defer alvus.Close()
+
+	// Without token → 401
+	req, _ := http.NewRequest("POST", alvus.URL+"/api/keys/1/disable", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/keys/1/disable (no auth): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// Wrong token → 401
+	req, _ = http.NewRequest("POST", alvus.URL+"/api/keys/1/disable", nil)
+	req.Header.Set("X-Admin-Token", "wrong-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/keys/1/disable (wrong token): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 with wrong token, got %d", resp.StatusCode)
+	}
+
+	// Correct token → 200
+	req, _ = http.NewRequest("POST", alvus.URL+"/api/keys/1/disable", nil)
+	req.Header.Set("X-Admin-Token", "my-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/keys/1/disable (correct token): %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["success"] != true {
+		t.Errorf("expected success=true, got %v", body["success"])
+	}
+}
+
+// ── Cooldown Key PUT ──────────────────────────────────
+
+func TestCooldownKeyHandler(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	// 冷却 index=1
+	req, _ := http.NewRequest("PUT", alvus.URL+"/api/keys/1/cooldown", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("PUT /api/keys/1/cooldown: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["success"] != true {
+		t.Errorf("expected success=true, got %v", body["success"])
+	}
+
+	// 越界 index=999 → 404
+	req2, _ := http.NewRequest("PUT", alvus.URL+"/api/keys/999/cooldown", nil)
+	resp3, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("PUT /api/keys/999/cooldown: %v", err)
+	}
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for out-of-range index, got %d", resp3.StatusCode)
+	}
+}
+
+// ── Delete Key by Index ───────────────────────────────
+
+func TestDeleteKeyByIndexHandler(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	// 删除 index=1
+	req, _ := http.NewRequest("DELETE", alvus.URL+"/api/keys/1", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys/1: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["success"] != true {
+		t.Errorf("expected success=true, got %v", body["success"])
+	}
+
+	// GET /api/keys 验证只剩 2 个 key
+	resp2, err := http.Get(alvus.URL + "/api/keys")
+	if err != nil {
+		t.Fatalf("GET /api/keys: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	var keys []map[string]interface{}
+	if err := json.NewDecoder(resp2.Body).Decode(&keys); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(keys) != 2 {
+		t.Errorf("expected 2 keys after DELETE, got %d", len(keys))
+	}
+
+	// 越界 index=999 → 404
+	req2, _ := http.NewRequest("DELETE", alvus.URL+"/api/keys/999", nil)
+	resp3, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys/999: %v", err)
+	}
+	resp3.Body.Close()
+	if resp3.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for out-of-range index, got %d", resp3.StatusCode)
+	}
+}
+
+func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
+	cfg := &config.Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        19999,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "my-token",
+		Keys:        []string{"key-a", "key-b", "key-c"},
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
+	state := newServerState(cfg, pool)
+	alvus := httptest.NewServer(state.mux)
+	defer alvus.Close()
+
+	// Without token → 401
+	req, _ := http.NewRequest("DELETE", alvus.URL+"/api/keys/1", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys/1 (no auth): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// With correct token → 200
+	req, _ = http.NewRequest("DELETE", alvus.URL+"/api/keys/1", nil)
+	req.Header.Set("X-Admin-Token", "my-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys/1 (correct token): %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["success"] != true {
+		t.Errorf("expected success=true, got %v", body["success"])
+	}
+}
+
+// ── Reload POST ──────────────────────────────────────
+
+func TestReloadHandler(t *testing.T) {
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	envContent := "PORT=19999\nTARGET_BASE_URL=http://localhost:19999\nGENAI_BASE_URL=http://localhost:19999\nAPI_KEYS=key-a,key-b\nCOOLDOWN_SEC=60\nMAX_RETRIES=3\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(envContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        19999,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "",
+		Keys:        []string{"key-a", "key-b"},
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
+	state := newServerState(cfg, pool)
+	alvus := httptest.NewServer(state.mux)
+	defer alvus.Close()
+
+	resp, err := http.Post(alvus.URL+"/api/reload", "application/json", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("POST /api/reload: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body["success"] != true {
+		t.Errorf("expected success=true, got %v", body["success"])
+	}
+}

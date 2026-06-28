@@ -125,9 +125,13 @@ func (p *KeyPool) CleanupOldRequests(idx int) {
 }
 
 // Cooldown sets a cooldown on a key for the given duration.
-func (p *KeyPool) Cooldown(idx int, d time.Duration) {
+// Returns an error if the index is out of range.
+func (p *KeyPool) Cooldown(idx int, d time.Duration) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if idx < 0 || idx >= len(p.keys) {
+		return fmt.Errorf("key index %d out of range (0-%d)", idx, len(p.keys)-1)
+	}
 	if until := time.Now().Add(d); p.cooldowns[idx].Before(until) {
 		p.cooldowns[idx] = until
 	}
@@ -140,12 +144,17 @@ func (p *KeyPool) Cooldown(idx int, d time.Duration) {
 	} else {
 		slog.Info("key on cooldown", "key_index", idx, "duration", d)
 	}
+	return nil
 }
 
 // Disable marks a key as permanently disabled.
-func (p *KeyPool) Disable(idx int) {
+// Returns an error if the index is out of range.
+func (p *KeyPool) Disable(idx int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if idx < 0 || idx >= len(p.keys) {
+		return fmt.Errorf("key index %d out of range (0-%d)", idx, len(p.keys)-1)
+	}
 	p.disabled[idx] = true
 	name := ""
 	if idx >= 0 && idx < len(p.names) {
@@ -154,6 +163,7 @@ func (p *KeyPool) Disable(idx int) {
 	if name != "" {
 		slog.Info("key disabled", "key_index", idx, "key_name", name)
 	}
+	return nil
 }
 
 // ActiveCount returns the number of non-disabled keys.
@@ -163,6 +173,33 @@ func (p *KeyPool) ActiveCount() int {
 	n := 0
 	for i := range p.keys {
 		if !p.disabled[i] {
+			n++
+		}
+	}
+	return n
+}
+
+// DisabledCount returns the number of disabled keys.
+func (p *KeyPool) DisabledCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := 0
+	for _, d := range p.disabled {
+		if d {
+			n++
+		}
+	}
+	return n
+}
+
+// CoolingCount returns the number of keys currently in cooldown (not disabled, but cooldown not yet expired).
+func (p *KeyPool) CoolingCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	n := 0
+	for i := range p.keys {
+		if !p.disabled[i] && now.Before(p.cooldowns[i]) {
 			n++
 		}
 	}
