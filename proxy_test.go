@@ -3,6 +3,7 @@ package main
 import (
 	"alvus/internal/config"
 	"alvus/internal/keypool"
+	"alvus/internal/server"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -22,17 +23,17 @@ import (
 // setupAlvus creates a mock upstream and an Alvus test server, returning both.
 // The caller must close both servers.
 func setupAlvus(tb testing.TB, upstream *httptest.Server, poolKeys []string, maxRetries, cooldownSec int) *httptest.Server {
-		tb.Helper()
-		cfg := &config.Config{
-			TargetBase:  upstream.URL,
-			GenaiBase:   upstream.URL,
-			Port:        0,
-			MaxRetries:  maxRetries,
-			CooldownSec: cooldownSec,
-		}
+	tb.Helper()
+	cfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  maxRetries,
+		CooldownSec: cooldownSec,
+	}
 	pool := keypool.NewKeyPool(poolKeys, nil)
-	state := newServerState(cfg, pool)
-	return httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	return httptest.NewServer(state.Handler())
 }
 
 // retryHandler returns a mock upstream handler that fails the first N calls
@@ -421,8 +422,8 @@ func TestProxyWithKeyManagement(t *testing.T) {
 		Keys:        []string{"initial-key"},
 	}
 	pool := keypool.NewKeyPool([]string{"initial-key"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	// Step 1: POST /api/keys to add a new key
@@ -918,8 +919,8 @@ func TestProxyError_UpstreamError(t *testing.T) {
 		CooldownSec: 60,
 	}
 	pool := keypool.NewKeyPool([]string{"test-key-a"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	resp, err := http.Get(alvus.URL + "/v1/models")
@@ -987,8 +988,8 @@ func TestCB_RateLimitRecovery(t *testing.T) {
 		UpstreamCBThreshold: 5,
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := newServerState(cfg, pool)
-	ts := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
 	// WHEN: send a proxy request
@@ -1030,8 +1031,8 @@ func TestCB_QuotaExhausted(t *testing.T) {
 		UpstreamCBThreshold: 10,
 	}
 	pool := keypool.NewKeyPool([]string{"single-key"}, nil)
-	state := newServerState(cfg, pool)
-	ts := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
 	req, err := http.NewRequest("GET", ts.URL+"/test", nil)
@@ -1084,8 +1085,8 @@ func TestCB_UpstreamErrorNoKeyPenalty(t *testing.T) {
 		UpstreamCBThreshold: 10,
 	}
 	pool := keypool.NewKeyPool([]string{"test-key"}, nil)
-	state := newServerState(cfg, pool)
-	ts := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
 	// WHEN: send proxy request -> gets 503 -> exhausts retries
@@ -1169,8 +1170,8 @@ func TestCB_UpstreamCircuitBreakerOpens(t *testing.T) {
 		UpstreamCBThreshold: 3,
 	}
 	pool := keypool.NewKeyPool([]string{"test-key"}, nil)
-	state := newServerState(cfg, pool)
-	ts := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
 	req, err := http.NewRequest("GET", ts.URL+"/test", nil)

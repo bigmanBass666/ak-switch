@@ -8,10 +8,10 @@ import (
 
 // Metrics holds all Prometheus metric handles for the application.
 type Metrics struct {
-	RequestsTotal  *prometheus.CounterVec
+	RequestsTotal   *prometheus.CounterVec
 	RequestDuration *prometheus.HistogramVec
-	KeyPoolKeys    *prometheus.GaugeVec
-	UpstreamErrors *prometheus.CounterVec
+	KeyPoolKeys     *prometheus.GaugeVec
+	UpstreamErrors  *prometheus.CounterVec
 }
 
 // NewRegistry creates a non-global Prometheus registry and registers all application metrics.

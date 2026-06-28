@@ -2,6 +2,7 @@ package main
 
 import (
 	"alvus/internal/config"
+	"alvus/internal/server"
 	"bytes"
 	"fmt"
 	"log/slog"
@@ -54,30 +55,34 @@ func TestStartupValidation(t *testing.T) {
 			fmt.Fprintf(os.Stderr, "chdir: %v\n", err)
 			os.Exit(1)
 		}
-		loadConfig() // 在无效配置下会 log.Fatalf → os.Exit(1)
+		server.LoadConfig() // 在无效配置下会 log.Fatalf → os.Exit(1)
 		return
 	}
 
 	// ── 主进程 ──
 	tests := []struct {
-		name    string
-		env     string
-		wantErr string // 期望在 stderr 中出现的错误关键词
+		name     string
+		env      string
+		wantErr  string // 期望在 stderr 中出现的错误关键词
+		wantCode int    // 期望退出码
 	}{
 		{
-			name:    "missing target base",
-			env:     "TARGET_BASE_URL=\nGENAI_BASE_URL=https://ai.example.com\nAPI_KEYS=key-a\nPORT=8080\n",
-			wantErr: "TARGET_BASE",
+			name:     "missing target base",
+			env:      "TARGET_BASE_URL=\nGENAI_BASE_URL=https://ai.example.com\nAPI_KEYS=key-a\nPORT=8080\n",
+			wantErr:  "TARGET_BASE_URL 为必填字段",
+			wantCode: 2,
 		},
 		{
-			name:    "empty keys",
-			env:     "TARGET_BASE_URL=https://example.com\nGENAI_BASE_URL=https://ai.example.com\nPORT=8080\n",
-			wantErr: "API",
+			name:     "empty keys",
+			env:      "TARGET_BASE_URL=https://example.com\nGENAI_BASE_URL=https://ai.example.com\nPORT=8080\n",
+			wantErr:  "配置错误: 未设置 API_KEYS",
+			wantCode: 2,
 		},
 		{
-			name:    "invalid port",
-			env:     "TARGET_BASE_URL=https://example.com\nGENAI_BASE_URL=https://ai.example.com\nAPI_KEYS=key-a\nPORT=abc\n",
-			wantErr: "PORT",
+			name:     "invalid port",
+			env:      "TARGET_BASE_URL=https://example.com\nGENAI_BASE_URL=https://ai.example.com\nAPI_KEYS=key-a\nPORT=abc\n",
+			wantErr:  "不是有效端口号",
+			wantCode: 2,
 		},
 	}
 
@@ -103,8 +108,8 @@ func TestStartupValidation(t *testing.T) {
 			cmd.Env = cleared
 			out, _ := cmd.CombinedOutput()
 
-			if cmd.ProcessState.Success() {
-				t.Error("expected non-zero exit for invalid config, got success")
+			if code := cmd.ProcessState.ExitCode(); code != tt.wantCode {
+				t.Errorf("expected exit code %d, got %d", tt.wantCode, code)
 			}
 			output := string(out)
 			if !strings.Contains(output, tt.wantErr) {
@@ -147,7 +152,7 @@ func TestHotReloadDiffLog(t *testing.T) {
 	writeEnv(t, envPath, "PORT=8081\nTARGET_BASE_URL=https://new.example.com\nGENAI_BASE_URL=https://ai.example.com\nAPI_KEYS=key-a,key-b\n")
 
 	// 重载
-	newCfg, _, err := reloadConfig()
+	newCfg, _, err := server.ReloadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +208,7 @@ func TestHotReloadRollback(t *testing.T) {
 	buf := captureSlog(t)
 
 	// 通过 reloadConfig 确认当前配置可正常加载
-	goodCfg, goodPool, err := reloadConfig()
+	goodCfg, goodPool, err := server.ReloadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +217,7 @@ func TestHotReloadRollback(t *testing.T) {
 	writeEnv(t, envPath, "TARGET_BASE_URL=\nGENAI_BASE_URL=\nAPI_KEYS=\nPORT=0\n")
 
 	// 尝试重载——应该失败
-	badCfg, badPool, err := reloadConfig()
+	badCfg, badPool, err := server.ReloadConfig()
 	if err == nil {
 		t.Error("expected error for invalid config, got nil")
 		t.Logf("badCfg=%+v badPool=%+v", badCfg, badPool)
@@ -246,7 +251,7 @@ func TestStartupValidConfig(t *testing.T) {
 			os.Exit(1)
 		}
 		// 只需要 loadConfig 不 panic/log.Fatal 就算通过
-		cfg, pool := loadConfig()
+		cfg, pool := server.LoadConfig()
 		fmt.Fprintf(os.Stdout, "ok: target=%s keys=%d", cfg.TargetBase, len(pool.Keys()))
 		return
 	}

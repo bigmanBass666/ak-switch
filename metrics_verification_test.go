@@ -3,6 +3,7 @@ package main
 import (
 	"alvus/internal/config"
 	"alvus/internal/keypool"
+	"alvus/internal/server"
 	"fmt"
 	"io"
 	"net/http"
@@ -289,7 +290,7 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	// Create server directly (not via setupAlvus) so we have access to state.metrics
+	// Create server directly (not via setupAlvus) so we have access to state.Metrics()
 	cfg := &config.Config{
 		TargetBase:  upstream.URL,
 		GenaiBase:   upstream.URL,
@@ -298,12 +299,12 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 		CooldownSec: 2,
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	// Manually refresh gauge for initial state
-	state.metrics.RefreshKeyPoolGauge(pool)
+	state.Metrics().RefreshKeyPoolGauge(pool)
 
 	// Before: record disabled count
 	resp, err := http.Get(alvus.URL + "/metrics")
@@ -322,7 +323,7 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 	resp.Body.Close()
 
 	// Manually refresh gauge to reflect the disabled key
-	state.metrics.RefreshKeyPoolGauge(pool)
+	state.Metrics().RefreshKeyPoolGauge(pool)
 
 	// After: read gauge
 	resp, err = http.Get(alvus.URL + "/metrics")

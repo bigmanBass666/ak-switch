@@ -3,6 +3,7 @@ package main
 import (
 	"alvus/internal/config"
 	"alvus/internal/keypool"
+	"alvus/internal/server"
 	"alvus/internal/utils"
 	"encoding/json"
 	"net/http"
@@ -21,11 +22,11 @@ func newTestServer(keys []string) *httptest.Server {
 		MaxRetries:  3,
 		CooldownSec: 60,
 		AdminToken:  "",
-	Keys:        []string{"key-a", "key-b"},
+		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool(keys, nil)
-	state := newServerState(cfg, pool)
-	return httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	return httptest.NewServer(state.Handler())
 }
 
 // ── Health ─────────────────────────────────────────
@@ -147,8 +148,8 @@ func TestConfigPost(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	reqBody := `{"targetBase":"https://new.example.com/v1","genaiBase":"https://genai.example.com","keys":["new-key-1","new-key-2"]}`
@@ -362,8 +363,8 @@ func TestHealthHandlerAuth(t *testing.T) {
 		AdminToken:  "my-token",
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -421,8 +422,8 @@ func TestClearHandlerAuth(t *testing.T) {
 		AdminToken:  "my-token",
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -567,8 +568,8 @@ func TestDisableKeyHandlerAuth(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -717,8 +718,8 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -781,8 +782,8 @@ func TestReloadHandler(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := newServerState(cfg, pool)
-	alvus := httptest.NewServer(state.mux)
+	state := server.NewServerState(cfg, pool, "")
+	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
 	resp, err := http.Post(alvus.URL+"/api/reload", "application/json", strings.NewReader(`{}`))

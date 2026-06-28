@@ -24,10 +24,10 @@ type KeyCircuitBreaker struct {
 	cooldownUntil time.Time
 	trippedReason string
 
-	base        time.Duration
-	multiplier  float64
-	backoffCap  time.Duration
-	jitterFn    func(int) time.Duration // override for testing; nil = real random
+	base       time.Duration
+	multiplier float64
+	backoffCap time.Duration
+	jitterFn   func(int) time.Duration // override for testing; nil = real random
 }
 
 // NewKeyCircuitBreaker creates a new KeyCircuitBreaker.
