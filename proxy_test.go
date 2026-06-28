@@ -274,9 +274,16 @@ func TestProxyAllKeysExhausted(t *testing.T) {
 		t.Fatalf("expected 503 Service Unavailable after exhaustion, got %d", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "alvus: exhausted all retries") {
-		t.Errorf("expected exhaustion message, got %q", strings.TrimSpace(string(body)))
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON error response: %v", err)
+	}
+	if body.Error.Code != "EXHAUSTED_RETRIES" {
+		t.Errorf("expected error.code EXHAUSTED_RETRIES, got %q", body.Error.Code)
 	}
 }
 
@@ -482,9 +489,16 @@ func TestProxyMaxRetriesConfig(t *testing.T) {
 		t.Fatalf("expected 503 after exhausting MaxRetries=2, got %d", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), "alvus: exhausted all retries") {
-		t.Errorf("expected exhaustion message, got %q", strings.TrimSpace(string(body)))
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON error response: %v", err)
+	}
+	if body.Error.Code != "EXHAUSTED_RETRIES" {
+		t.Errorf("expected error.code EXHAUSTED_RETRIES, got %q", body.Error.Code)
 	}
 }
 
@@ -751,5 +765,186 @@ func TestProxySlogOutput(t *testing.T) {
 	// Must NOT contain printf-style log format
 	if strings.Contains(output, "→ %s %s") || strings.Contains(output, "log.Printf") {
 		t.Errorf("output appears to contain old-style log.Printf format:\n%s", output)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 18. Error handling — BadRequest (body too large)
+// ---------------------------------------------------------------------------
+
+func TestProxyError_BadRequest(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	alvus := setupAlvus(t, upstream, []string{"test-key-a"}, 10, 60)
+	defer alvus.Close()
+
+	// 11MB body exceeds the 10MB MaxBytesReader limit
+	largeBody := make([]byte, 11<<20)
+	req, err := http.NewRequest("POST", alvus.URL+"/v1/chat/completions", bytes.NewReader(largeBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if body.Error.Code != "BAD_REQUEST" {
+		t.Errorf("expected error.code BAD_REQUEST, got %q", body.Error.Code)
+	}
+	if body.Error.Message == "" {
+		t.Error("expected non-empty error.message")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 19. Error handling — AllKeysInvalid (single key disabled by 401)
+// ---------------------------------------------------------------------------
+
+func TestProxyError_AllKeysInvalid(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer upstream.Close()
+
+	// Only 1 key — after 401 it gets disabled, ActiveCount == 0
+	alvus := setupAlvus(t, upstream, []string{"single-key"}, 10, 60)
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/v1/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 Service Unavailable, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if body.Error.Code != "ALL_KEYS_INVALID" {
+		t.Errorf("expected error.code ALL_KEYS_INVALID, got %q", body.Error.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 20. Error handling — ExhaustedRetries (all keys rate-limited)
+// ---------------------------------------------------------------------------
+
+func TestProxyError_ExhaustedRetries(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer upstream.Close()
+
+	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/v1/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 Service Unavailable, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if body.Error.Code != "EXHAUSTED_RETRIES" {
+		t.Errorf("expected error.code EXHAUSTED_RETRIES, got %q", body.Error.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 21. Error handling — UpstreamError (invalid target URL)
+// ---------------------------------------------------------------------------
+
+func TestProxyError_UpstreamError(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	// Set TargetBase to something that makes NewRequestWithContext fail.
+	// An invalid scheme causes http.NewRequestWithContext to return an error.
+	cfg := &config.Config{
+		TargetBase:  "://invalid",
+		GenaiBase:   "://invalid",
+		Port:        0,
+		MaxRetries:  3,
+		CooldownSec: 60,
+	}
+	pool := keypool.NewKeyPool([]string{"test-key-a"}, nil)
+	state := newServerState(cfg, pool)
+	alvus := httptest.NewServer(state.mux)
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/v1/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 Internal Server Error, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected Content-Type application/json, got %q", ct)
+	}
+
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if body.Error.Code != "UPSTREAM_ERROR" {
+		t.Errorf("expected error.code UPSTREAM_ERROR, got %q", body.Error.Code)
 	}
 }

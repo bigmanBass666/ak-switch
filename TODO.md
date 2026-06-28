@@ -21,6 +21,7 @@
 - [x] **可观测性：Prometheus Metrics** — 4 个指标（requests_total / request_duration_seconds / keypool_keys / upstream_errors_total），`/metrics` 端点，proxyHandler 全埋点，自定义 Registry 隔离
 - [x] **Metrics 验收测试** — 6 个集成验收测试，mock upstream 真实代理请求验证所有 4 个指标增量正确
 - [x] **CLAUDE.md 测试策略对齐** — 明确 Testing Trophy 模型，集成验收测试为主力
+- [x] **Error Handling 统一** — 4 个错误码（BAD_REQUEST / UPSTREAM_ERROR / ALL_KEYS_INVALID / EXHAUSTED_RETRIES），proxyHandler 错误响应统一 JSON 格式 `{"error":{"code":"...","message":"..."}}`，4 个集成验收测试覆盖所有错误路径
 
 ### 80+ 测试覆盖
 
@@ -31,10 +32,10 @@
 | `internal/logstore/logstore_test.go` | 4 | 单元测试 |
 | `handlers_test.go` | 14 | Handler 测试 |
 | `logstore_test.go` | 4 | Handler 测试 |
-| `proxy_test.go` | 17 | **集成验收测试** |
+| `proxy_test.go` | 21 | **集成验收测试** |
 | `integration_test.go` | 4 | **集成测试** |
 | `metrics_verification_test.go` | 6 | **集成验收测试** |
-| **总计** | **84** | |
+| **总计** | **88** | |
 
 ## ⚠️ 已知约束
 

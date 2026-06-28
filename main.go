@@ -30,6 +30,18 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// ── Error Handling ─────────────────────────────────
+
+// ErrorCode represents a machine-readable error category for proxy responses.
+type ErrorCode string
+
+const (
+	ErrorBadRequest       ErrorCode = "BAD_REQUEST"
+	ErrorUpstreamError    ErrorCode = "UPSTREAM_ERROR"
+	ErrorAllKeysInvalid   ErrorCode = "ALL_KEYS_INVALID"
+	ErrorExhaustedRetries ErrorCode = "EXHAUSTED_RETRIES"
+)
+
 func loadConfig() (*config.Config, *keypool.KeyPool) {
 	cfg, err := config.Load(".env")
 	if err != nil {
@@ -116,6 +128,18 @@ func newServerState(cfg *config.Config, pool *keypool.KeyPool) *ServerState {
 
 func (s *ServerState) swHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// writeProxyError writes a JSON error response with the given status code and error code.
+func writeProxyError(w http.ResponseWriter, status int, code ErrorCode, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    string(code),
+			"message": message,
+		},
+	})
 }
 
 type ConfigPayload struct {
@@ -373,7 +397,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		bodyBytes, err = io.ReadAll(r.Body)
 		r.Body.Close()
 		if err != nil {
-			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			writeProxyError(w, http.StatusBadRequest, ErrorBadRequest, "request body too large or unreadable")
 			recordMetrics("4xx", "")
 			return
 		}
@@ -411,7 +435,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		req, err := http.NewRequestWithContext(r.Context(), r.Method, target, bytes.NewReader(bodyBytes))
 		if err != nil {
 			s.metrics.UpstreamErrors.WithLabelValues("network").Inc()
-			http.Error(w, "proxy: failed to build upstream request", http.StatusInternalServerError)
+			writeProxyError(w, http.StatusInternalServerError, ErrorUpstreamError, "failed to build upstream request")
 			recordMetrics("5xx", "")
 			return
 		}
@@ -456,7 +480,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 			s.metrics.UpstreamErrors.WithLabelValues("auth_rejected").Inc()
 			pool.Disable(idx)
 			if pool.ActiveCount() == 0 {
-				http.Error(w, "alvus: all keys are invalid or revoked", http.StatusServiceUnavailable)
+				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys are invalid or revoked")
 				recordMetrics("5xx", "")
 				return
 			}
@@ -512,7 +536,7 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Error(w, "alvus: exhausted all retries", http.StatusServiceUnavailable)
+	writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, "exhausted all retries")
 	recordMetrics("5xx", "")
 }
 
