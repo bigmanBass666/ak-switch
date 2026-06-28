@@ -12,6 +12,22 @@ import (
 	"strings"
 )
 
+// Exit codes for controlled process termination.
+const (
+	ExitCodeOK      int = 0 // 正常
+	ExitCodeRuntime int = 1 // 运行时错误（端口占用等）
+	ExitCodeConfig  int = 2 // 配置错误（缺少字段、格式错误）
+	ExitCodeSystem  int = 3 // 系统资源错误（无法读取文件等）
+)
+
+// ConfigError carries a category tag so callers can choose the right exit code.
+type ConfigError struct {
+	Category string // "config" or "system"
+	Message  string
+}
+
+func (e *ConfigError) Error() string { return e.Message }
+
 // ConfigChange represents a single field that changed between two Config values.
 type ConfigChange struct {
 	Field    string
@@ -35,10 +51,10 @@ type Config struct {
 	Keys            []string // API keys (at least one required)
 	KeyNames        []string // Corresponding key names (empty string if unnamed), same length as Keys
 
-	BackoffCapSec      int     // Key 退避上限(秒)，达到此值自动禁用 (default 120)
-	BackoffMultiplier  float64 // 指数退避倍数 (default 2)
-	CBResetSec         int     // 上游熔断器 OPEN→HALF_OPEN 超时(秒) (default 30)
-	UpstreamCBThreshold int    // 上游熔断器连续失败触发阈值 (default 5)
+	BackoffCapSec       int     // Key 退避上限(秒)，达到此值自动禁用 (default 120)
+	BackoffMultiplier   float64 // 指数退避倍数 (default 2)
+	CBResetSec          int     // 上游熔断器 OPEN→HALF_OPEN 超时(秒) (default 30)
+	UpstreamCBThreshold int     // 上游熔断器连续失败触发阈值 (default 5)
 }
 
 // DefaultConfig returns a Config with all optional fields set to their defaults.
@@ -79,7 +95,10 @@ func DefaultConfig() *Config {
 func Load(envPath string) (*Config, error) {
 	if envPath != "" {
 		if err := loadDotEnv(envPath); err != nil {
-			return nil, fmt.Errorf("load .env from %q: %w", envPath, err)
+			return nil, &ConfigError{
+				Category: "system",
+				Message:  fmt.Sprintf("系统错误: 读取配置文件 %q 失败: %v", envPath, err),
+			}
 		}
 	}
 
@@ -89,7 +108,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("PORT"); v != "" {
 		port, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid PORT %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: PORT=\"%s\" 不是有效端口号，有效范围 1-65535", v)}
 		}
 		cfg.Port = port
 	}
@@ -124,7 +143,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("MAX_RETRIES"); v != "" {
 		retries, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid MAX_RETRIES %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: MAX_RETRIES=\"%s\" 不是有效整数，有效范围 1-100", v)}
 		}
 		cfg.MaxRetries = retries
 	}
@@ -138,7 +157,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("COOLDOWN_SEC"); v != "" {
 		cooldown, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid COOLDOWN_SEC %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: COOLDOWN_SEC=\"%s\" 不是有效整数，有效范围 1-86400", v)}
 		}
 		cfg.CooldownSec = cooldown
 	}
@@ -147,7 +166,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("BACKOFF_CAP_SEC"); v != "" {
 		capSec, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid BACKOFF_CAP_SEC %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: BACKOFF_CAP_SEC=\"%s\" 不是有效整数，有效范围 30-3600", v)}
 		}
 		cfg.BackoffCapSec = capSec
 	}
@@ -156,7 +175,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("BACKOFF_MULTIPLIER"); v != "" {
 		mult, err := strconv.ParseFloat(v, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid BACKOFF_MULTIPLIER %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: BACKOFF_MULTIPLIER=\"%s\" 不是有效数值，有效范围 >= 1.0", v)}
 		}
 		cfg.BackoffMultiplier = mult
 	}
@@ -165,7 +184,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("CB_RESET_SEC"); v != "" {
 		resetSec, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid CB_RESET_SEC %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: CB_RESET_SEC=\"%s\" 不是有效整数，有效范围 5-3600", v)}
 		}
 		cfg.CBResetSec = resetSec
 	}
@@ -174,7 +193,7 @@ func Load(envPath string) (*Config, error) {
 	if v := os.Getenv("UPSTREAM_CB_THRESHOLD"); v != "" {
 		threshold, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("invalid UPSTREAM_CB_THRESHOLD %q: %w", v, err)
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: UPSTREAM_CB_THRESHOLD=\"%s\" 不是有效整数，有效范围 2-100", v)}
 		}
 		cfg.UpstreamCBThreshold = threshold
 	}
@@ -182,7 +201,7 @@ func Load(envPath string) (*Config, error) {
 	// Keys: API_KEYS is primary, then fallback to KEY, KEY1-KEY5, KEYA, KEYB
 	keys, names := parseKeys()
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("no API keys found: set API_KEYS, KEY, KEY1-5, or KEYA/KEYB in environment or .env file")
+		return nil, &ConfigError{Category: "config", Message: "配置错误: 未设置 API_KEYS，请通过环境变量或 .env 文件设置至少一个 API Key"}
 	}
 	cfg.Keys = keys
 	cfg.KeyNames = names
@@ -250,28 +269,28 @@ func splitKeys(raw string) ([]string, []string) {
 // Returns a descriptive error for the first problem found.
 func (c *Config) Validate() error {
 	if c.Port < 1 || c.Port > 65535 {
-		return fmt.Errorf("PORT must be between 1 and 65535, got %d", c.Port)
+		return &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: PORT=%d 不在有效范围(1-65535)内", c.Port)}
 	}
 	if c.TargetBase == "" {
-		return fmt.Errorf("TARGET_BASE_URL is required")
+		return &ConfigError{Category: "config", Message: "配置错误: TARGET_BASE_URL 为必填字段，请设置上游 API 基础地址"}
 	}
 	if c.GenaiBase == "" {
-		return fmt.Errorf("GENAI_BASE_URL is required")
+		return &ConfigError{Category: "config", Message: "配置错误: GENAI_BASE_URL 为必填字段，请设置 GenAI API 基础地址"}
 	}
 	if len(c.Keys) == 0 {
-		return fmt.Errorf("at least one API key is required (set API_KEYS)")
+		return &ConfigError{Category: "config", Message: "配置错误: 至少需要一个 API Key（通过 API_KEYS 设置）"}
 	}
 	if c.BackoffCapSec < 30 {
-		return fmt.Errorf("BACKOFF_CAP_SEC must be at least 30, got %d", c.BackoffCapSec)
+		return &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: BACKOFF_CAP_SEC=%d 不能小于 30 秒", c.BackoffCapSec)}
 	}
 	if c.BackoffMultiplier < 1 {
-		return fmt.Errorf("BACKOFF_MULTIPLIER must be at least 1, got %f", c.BackoffMultiplier)
+		return &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: BACKOFF_MULTIPLIER=%.1f 不能小于 1.0", c.BackoffMultiplier)}
 	}
 	if c.CBResetSec < 5 {
-		return fmt.Errorf("CB_RESET_SEC must be at least 5, got %d", c.CBResetSec)
+		return &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: CB_RESET_SEC=%d 不能小于 5 秒", c.CBResetSec)}
 	}
 	if c.UpstreamCBThreshold < 2 {
-		return fmt.Errorf("UPSTREAM_CB_THRESHOLD must be at least 2, got %d", c.UpstreamCBThreshold)
+		return &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: UPSTREAM_CB_THRESHOLD=%d 不能小于 2", c.UpstreamCBThreshold)}
 	}
 	return nil
 }
@@ -451,7 +470,7 @@ func loadDotEnv(filename string) error {
 		if os.IsNotExist(err) {
 			return nil // missing .env is not an error here
 		}
-		return fmt.Errorf("read %q: %w", filename, err)
+		return fmt.Errorf("读取文件失败: %w", err)
 	}
 
 	for _, line := range strings.Split(string(data), "\n") {

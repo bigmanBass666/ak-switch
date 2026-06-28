@@ -588,7 +588,7 @@ func TestDiff_NamedKeys(t *testing.T) {
 		// Check old value also has names
 		oldVal := changeMap["API_KEYS"]
 		_ = oldVal // old value also serialized; just checking new is enough
-}
+	}
 }
 
 func TestLoad_MissingEnvFile(t *testing.T) {
