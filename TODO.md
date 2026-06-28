@@ -36,16 +36,18 @@
 
 | 项目 | 结果 |
 |------|------|
-| Dockerfile 多阶段构建语法 | ✅ 已验证 |
-| docker-compose.yml 语法 | ✅ 已验证 |
-| .dockerignore 排除规则 | ✅ 已验证 |
+| Dockerfile 多阶段构建语法 | ✅ CI 构建通过 |
+| docker-compose.yml 语法 | ✅ `docker compose config` 解析通过 |
+| .dockerignore 排除规则 | ✅ |
 | CI Docker build 步骤 | ✅ 已在 go.yml 中配置 |
-| 本地 Docker build | ⏳ 本地无 Docker Desktop，依赖 CI 触发验证 |
+| WSL2 docker build | ⚠️ 中国网络限制，Docker Hub 不可达 |
+| Dockerfile 简化 | ✅ 移除 gcr.io/distroless 依赖，改用 alpine:3.19 runtime |
 
 ### 说明
 
-- 所有 P0 文件已提交到 `feature/p0-production-ready` 分支
-- 本地无 Docker Desktop，Docker 构建的最终验证需等待推送后 CI 结果
+- Docker Hub 在中国网络无法直接拉取，Dockerfile 已在 GitHub Actions CI 中成功构建
+- Dockerfile 已简化：3 阶段（tools + builder + distroless）→ 2 阶段（builder + alpine），消除 gcr.io 依赖
+- WSL2 9p 文件系统不支持 inotify，容器内热重载不会触发（不影响裸跑）
 - 高并发性能瓶颈（100+ QPS 开始饱和）属于优化范围，不影响功能正确性
 
 ## P1 — 应该做（功能完善）
@@ -165,3 +167,7 @@
 3. **按优先级做** — 从 P1 开始逐个击破
 4. **挑感兴趣的先做** — 每个项目都有独立价值
 5. **告诉我聚焦方向** — 我帮你拆成可执行的 spec + tasks
+
+---
+
+- 给 api key 添加名称支持,现在的key都没有名称, 就很难分辨.
