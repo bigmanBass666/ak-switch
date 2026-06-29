@@ -198,6 +198,10 @@ func LoadConfig() (*config.Config, *keypool.KeyPool) {
 		}
 	}
 	slog.Info("config loaded", "keys", len(cfg.Keys), "target", cfg.TargetBase, "genai", cfg.GenaiBase)
+
+	// Set encryption key for key pool persistence
+	keypool.SetEncryptionKey(cfg.EncryptionKey)
+
 	return cfg, keypool.NewKeyPool(keys, names)
 }
 
@@ -208,7 +212,7 @@ func ReloadConfig() (*config.Config, *keypool.KeyPool, error) {
 		"TARGET_BASE_URL", "GENAI_BASE_URL", "PORT", "COOLDOWN_SEC", "ADMIN_TOKEN",
 		"MAX_RETRIES", "DISABLE_THINKING", "GENAI_MODEL", "LOG_LEVEL",
 		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC", "UPSTREAM_CB_THRESHOLD",
-			"KEYS_FILE",
+			"KEYS_FILE", "KEYS_ENCRYPTION_KEY",
 		"HEALTH_CHECK_INTERVAL_SEC", "HEALTH_CHECK_PATH", "HEALTH_CHECK_TIMEOUT_SEC",
 	} {
 		os.Unsetenv(k)

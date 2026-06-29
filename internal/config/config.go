@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"encoding/hex"
 )
 
 // Exit codes for controlled process termination.
@@ -51,6 +52,7 @@ type Config struct {
 	Keys            []string // API keys (at least one required)
 	KeyNames        []string // Corresponding key names (empty string if unnamed), same length as Keys
 	KeysFile        string   // JSON file path for key persistence (default "keys.json")
+	EncryptionKey   []byte   `json:"-"` // AES-256 key for keys.json encryption (32 bytes, hex-encoded via KEYS_ENCRYPTION_KEY)
 
 	BackoffCapSec       int     // Key 退避上限(秒)，达到此值自动禁用 (default 120)
 	BackoffMultiplier   float64 // 指数退避倍数 (default 2)
@@ -239,6 +241,15 @@ func Load(envPath string) (*Config, error) {
 		cfg.KeysFile = v
 	}
 
+	// EncryptionKey
+	if v := os.Getenv("KEYS_ENCRYPTION_KEY"); v != "" {
+		dec, err := hex.DecodeString(v)
+		if err != nil {
+			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: KEYS_ENCRYPTION_KEY 不是有效十六进制字符串: %v", err)}
+		}
+		cfg.EncryptionKey = dec
+	}
+
 	// Keys: API_KEYS is primary, then fallback to KEY, KEY1-KEY5, KEYA, KEYB
 	keys, names := parseKeys()
 	if len(keys) == 0 {
@@ -339,6 +350,9 @@ func (c *Config) Validate() error {
 	if c.HealthCheckTimeoutSec < 1 {
 		return &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: HEALTH_CHECK_TIMEOUT_SEC=%d 不能小于 1", c.HealthCheckTimeoutSec)}
 	}
+	if len(c.EncryptionKey) > 0 && len(c.EncryptionKey) != 32 {
+		return &ConfigError{Category: "config", Message: "配置错误: KEYS_ENCRYPTION_KEY 必须正好是 32 字节（64 个十六进制字符）"}
+	}
 	return nil
 }
 
@@ -353,6 +367,7 @@ func (c *Config) Sanitized() *Config {
 	}
 	s.KeyNames = make([]string, len(c.KeyNames))
 	copy(s.KeyNames, c.KeyNames)
+	s.EncryptionKey = nil // excluded from sanitized output
 	return &s
 }
 
@@ -481,6 +496,14 @@ func (c *Config) Diff(other *Config) []ConfigChange {
 			NewValue: strconv.Itoa(other.HealthCheckTimeoutSec),
 		})
 	}
+	// EncryptionKey: only expose set/unset state
+	if string(c.EncryptionKey) != string(other.EncryptionKey) {
+		changes = append(changes, ConfigChange{
+			Field:    "KEYS_ENCRYPTION_KEY",
+			OldValue: encKeyState(c.EncryptionKey),
+			NewValue: encKeyState(other.EncryptionKey),
+		})
+	}
 	// Keys: compare as masked strings (with names)
 	if !stringSliceEqual(c.Keys, other.Keys) {
 		oldKeys := maskedSliceWithNames(c.Keys, c.KeyNames)
@@ -532,6 +555,13 @@ func stringSliceEqual(a, b []string) bool {
 
 // loadDotEnv reads a .env file and sets environment variables.
 // Existing environment variables are NOT overwritten (env has higher priority).
+func encKeyState(key []byte) string {
+	if len(key) == 0 {
+		return "unset"
+	}
+	return "set (32 bytes)"
+}
+
 func loadDotEnv(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {

@@ -30,26 +30,28 @@
 - [x] **优雅关闭（Graceful Shutdown）** — `http.Server.Shutdown()` 替代直接退出，`sync.WaitGroup` 跟踪后台 goroutine 生命周期，30s 超时等待活跃请求完成，3 个验收测试
 - [x] **上游健康检查** — 主动健康检查 goroutine 定期探测上游（HEAD），配合 UpstreamCircuitBreaker 自动恢复；3 个配置字段（间隔/路径/超时）+ 3 个新 Prometheus 指标 + /health 端点增强 + 5 个验收测试
 - [x] **Docker Compose 完整部署** — 三服务架构（Alvus + Prometheus + Grafana），持久化数据卷，预置监控面板，内部网络隔离
+- [x] **Key 加密存储** — AES-256-GCM 加密模块（`internal/keypool/crypto.go`），`SaveFullStore`/`LoadFullStore` 自动加密/解密 Key 字段，`KEYS_ENCRYPTION_KEY` 配置字段与校验，23 个新测试（9 单元 + 5 store + 6 配置 + 3 集成验收）
 
-### 135 测试覆盖
+### 163 测试覆盖
 
 | 文件 | 测试数 | 类型 |
 |------|--------|------|
-| `internal/config/config_test.go` | 24 | 单元测试 |
+| `internal/config/config_test.go` | 30 | 单元测试 |
 | `internal/keypool/keypool_test.go` | 12 | 单元测试 |
-| `internal/keypool/store_test.go` | 9 | 单元测试 |
+| `internal/keypool/store_test.go` | 14 | 单元测试 |
+| `internal/keypool/crypto_test.go` | 9 | 单元测试 |
 | `internal/logstore/logstore_test.go` | 5 | 单元测试 |
 | `internal/circuitbreaker/key_test.go` | 10 | 单元测试 |
 | `internal/circuitbreaker/upstream_test.go` | 9 | 单元测试 |
 | `handlers_test.go` | 16 | Handler 测试 |
 | `logstore_test.go` | 4 | Handler 测试 |
-| `proxy_test.go` | 28 | **集成验收测试** |
+| `proxy_test.go` | 31 | **集成验收测试** |
 | `integration_test.go` | 4 | **集成测试** |
 | `metrics_verification_test.go` | 6 | **集成验收测试** |
 | `graceful_shutdown_test.go` | 3 | **集成验收测试** |
 | `healthcheck_test.go` | 5 | **集成验收测试** |
 | `docker_compose_test.go` | 5 | **集成验收测试** |
-| **总计** | **140** | |
+| **总计** | **163** | |
 
 ## 🔜 短期计划
 
@@ -120,17 +122,17 @@ _全部完成，暂无短期计划。_
 
 ### ~Docker Compose 完整部署~ ✅ 已完成
 
-### 安全性增强
+### ~安全性增强~ ✅ 已完成
 
-- Key 加密存储（非明文内存）
+- ~~Key 加密存储（非明文内存）~~ ✅
 - 管理 API 返回 Key 统一脱敏（部分已实现）
 - 可选从外部密钥管理服务读取 Key（Vault / AWS Secrets Manager）
 
-### 上游健康检查
+### ~上游健康检查~ ✅ 已完成
 
-- 被动健康检查（根据请求失败率判定）
-- 主动健康检查（定期 PING 上游端点）
-- 不健康上游自动摘除，恢复后自动加入
+- ~~被动健康检查（根据请求失败率判定）~~ （via UpstreamCB）
+- ~~主动健康检查（定期 HEAD 上游端点）~~ ✅
+- ~~不健康上游自动摘除，恢复后自动加入~~ ✅
 
 ### 优雅降级
 

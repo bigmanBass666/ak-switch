@@ -16,6 +16,7 @@ func resetEnv() {
 		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC",
 		"UPSTREAM_CB_THRESHOLD", "KEYS_FILE",
 		"HEALTH_CHECK_INTERVAL_SEC", "HEALTH_CHECK_PATH", "HEALTH_CHECK_TIMEOUT_SEC",
+			"KEYS_ENCRYPTION_KEY",
 	} {
 		os.Unsetenv(key)
 	}
@@ -665,5 +666,100 @@ func TestConfig_HealthCheckTimeoutTooSmall(t *testing.T) {
 	cfg.HealthCheckTimeoutSec = 0
 	if err := cfg.Validate(); err == nil {
 		t.Error("Validate() expected error for HealthCheckTimeoutSec=0, got nil")
+	}
+}
+
+
+func TestConfig_EncryptionKey_Default(t *testing.T) {
+	resetEnv()
+	t.Setenv("TARGET_BASE_URL", "https://example.com")
+	t.Setenv("GENAI_BASE_URL", "https://ai.example.com")
+	t.Setenv("API_KEYS", "nvapi-key1")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.EncryptionKey != nil {
+		t.Error("EncryptionKey should be nil by default")
+	}
+}
+
+func TestConfig_EncryptionKey_Valid(t *testing.T) {
+	resetEnv()
+	t.Setenv("TARGET_BASE_URL", "https://example.com")
+	t.Setenv("GENAI_BASE_URL", "https://ai.example.com")
+	t.Setenv("API_KEYS", "nvapi-key1")
+	t.Setenv("KEYS_ENCRYPTION_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if len(cfg.EncryptionKey) != 32 {
+		t.Fatalf("EncryptionKey length = %d, want 32", len(cfg.EncryptionKey))
+	}
+	if cfg.EncryptionKey[0] != 0x00 || cfg.EncryptionKey[31] != 0x1f {
+		t.Error("EncryptionKey decoded incorrectly")
+	}
+}
+
+func TestConfig_EncryptionKey_TooShort(t *testing.T) {
+	resetEnv()
+	t.Setenv("TARGET_BASE_URL", "https://example.com")
+	t.Setenv("GENAI_BASE_URL", "https://ai.example.com")
+	t.Setenv("API_KEYS", "nvapi-key1")
+	t.Setenv("KEYS_ENCRYPTION_KEY", "000102030405060708090a0b0c0d0e0f")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Error("Validate() expected error for short key, got nil")
+	}
+}
+
+func TestConfig_EncryptionKey_TooLong(t *testing.T) {
+	resetEnv()
+	t.Setenv("TARGET_BASE_URL", "https://example.com")
+	t.Setenv("GENAI_BASE_URL", "https://ai.example.com")
+	t.Setenv("API_KEYS", "nvapi-key1")
+	t.Setenv("KEYS_ENCRYPTION_KEY", "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f")
+
+	cfg, err := Load("")
+	if err != nil {
+		t.Fatalf("Load() unexpected error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Error("Validate() expected error for long key, got nil")
+	}
+}
+
+func TestConfig_EncryptionKey_InvalidHex(t *testing.T) {
+	resetEnv()
+	t.Setenv("TARGET_BASE_URL", "https://example.com")
+	t.Setenv("GENAI_BASE_URL", "https://ai.example.com")
+	t.Setenv("API_KEYS", "nvapi-key1")
+	t.Setenv("KEYS_ENCRYPTION_KEY", "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+
+	_, err := Load("")
+	if err == nil {
+		t.Fatal("Load() expected error for invalid hex, got nil")
+	}
+}
+
+func TestConfig_EncryptionKey_SanitizedExcluded(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.TargetBase = "https://example.com"
+	cfg.GenaiBase = "https://ai.example.com"
+	cfg.Keys = []string{"nvapi-key1"}
+	cfg.EncryptionKey = []byte{1, 2, 3, 4, 5}
+
+	s := cfg.Sanitized()
+	if s.EncryptionKey != nil {
+		t.Error("Sanitized() should have nil EncryptionKey")
 	}
 }

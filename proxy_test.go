@@ -1415,3 +1415,192 @@ func TestKeyPersistence_DisableKeyAndPersist(t *testing.T) {
 		}
 	}
 }
+
+// ── Key Encryption Integration Tests ────────────────────────
+
+func makeEncKey(b byte) []byte {
+	k := make([]byte, 32)
+	for i := range k {
+		k[i] = b
+	}
+	return k
+}
+
+// TestKeyEncryption_EndToEnd verifies that with encryption enabled:
+//  1. keys.json does NOT contain plaintext keys
+//  2. After "restart" (new server loading the file), keys work correctly
+func TestKeyEncryption_EndToEnd(t *testing.T) {
+	keypool.SetEncryptionKey(makeEncKey('T'))
+	defer keypool.SetEncryptionKey(nil)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	tmpDir := t.TempDir()
+	keysFile := filepath.Join(tmpDir, "keys.json")
+
+	cfg := &config.Config{
+		TargetBase:     upstream.URL,
+		GenaiBase:      upstream.URL,
+		Port:           0,
+		MaxRetries:     3,
+		CooldownSec:    60,
+		KeysFile:       keysFile,
+		EncryptionKey:  makeEncKey('T'),
+	}
+	pool := keypool.NewKeyPool([]string{"initial-key"}, nil)
+
+	state := server.NewServerState(cfg, pool, "", keysFile)
+	alvus := httptest.NewServer(state.Handler())
+
+	// Add a key via API — triggers PersistKeys
+	resp, err := http.Post(alvus.URL+"/api/keys", "application/json",
+		strings.NewReader(`{"key":"encrypted-key-via-api"}`))
+	if err != nil {
+		t.Fatalf("POST /api/keys: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/keys: got %d, want 200", resp.StatusCode)
+	}
+
+	alvus.Close()
+
+	// Read the raw file — plaintext must NOT appear
+	data, err := os.ReadFile(keysFile)
+	if err != nil {
+		t.Fatalf("read keys.json: %v", err)
+	}
+	if strings.Contains(string(data), "encrypted-key-via-api") {
+		t.Fatal("plaintext key found in encrypted keys.json")
+	}
+	if strings.Contains(string(data), "initial-key") {
+		t.Fatal("plaintext initial key found in encrypted keys.json")
+	}
+	t.Logf("encrypted keys.json (no plaintext keys): %s", string(data))
+
+	// Simulate restart: load the encrypted file and create a new server
+	fileKeys, fileNames, err := keypool.LoadKeysFromFile(keysFile)
+	if err != nil {
+		t.Fatalf("LoadKeysFromFile after encryption: %v", err)
+	}
+	if len(fileKeys) != 2 {
+		t.Fatalf("expected 2 keys after restart, got %d: %v", len(fileKeys), fileKeys)
+	}
+
+	restoredPool := keypool.NewKeyPool(fileKeys, fileNames)
+	newCfg := &config.Config{
+		TargetBase:    upstream.URL,
+		GenaiBase:     upstream.URL,
+		Port:          0,
+		MaxRetries:    3,
+		CooldownSec:   60,
+		KeysFile:      keysFile,
+		EncryptionKey: makeEncKey('T'),
+	}
+	restoredState := server.NewServerState(newCfg, restoredPool, "", keysFile)
+	alvus2 := httptest.NewServer(restoredState.Handler())
+	defer alvus2.Close()
+
+	// Verify both keys are present via API
+	resp2, err := http.Get(alvus2.URL + "/api/keys")
+	if err != nil {
+		t.Fatalf("GET /api/keys: %v", err)
+	}
+	defer resp2.Body.Close()
+	body, _ := io.ReadAll(resp2.Body)
+
+	var keyList []map[string]interface{}
+	if err := json.Unmarshal(body, &keyList); err != nil {
+		t.Fatalf("decode /api/keys: %v", err)
+	}
+	if len(keyList) != 2 {
+		t.Errorf("expected 2 keys, got %d: %s", len(keyList), string(body))
+	}
+}
+
+// TestKeyEncryption_TamperedFile verifies that loading a tampered encrypted
+// keys.json results in an error.
+func TestKeyEncryption_TamperedFile(t *testing.T) {
+	keypool.SetEncryptionKey(makeEncKey('S'))
+	defer keypool.SetEncryptionKey(nil)
+
+	tmpDir := t.TempDir()
+	keysFile := filepath.Join(tmpDir, "keys.json")
+
+	store := &keypool.KeyStore{
+		Keys: []keypool.KeyEntry{
+			{Key: "my-secret-key"},
+		},
+	}
+	if err := keypool.SaveFullStore(keysFile, store); err != nil {
+		t.Fatalf("SaveFullStore: %v", err)
+	}
+
+	// Tamper with the file
+	data, err := os.ReadFile(keysFile)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if len(data) > 30 {
+		data[20] ^= 0xFF
+		os.WriteFile(keysFile, data, 0644)
+	}
+
+	// Loading should fail
+	_, _, err = keypool.LoadKeysFromFile(keysFile)
+	if err == nil {
+		t.Error("expected error when loading tampered encrypted file, got nil")
+	}
+}
+
+// TestKeyEncryption_NoEncryption_BackwardCompatible verifies that
+// without an encryption key, the system works as before (plaintext keys).
+func TestKeyEncryption_NoEncryption_BackwardCompatible(t *testing.T) {
+	keypool.SetEncryptionKey(nil)
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	tmpDir := t.TempDir()
+	keysFile := filepath.Join(tmpDir, "keys.json")
+
+	cfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		KeysFile:    keysFile,
+	}
+	pool := keypool.NewKeyPool([]string{"plaintext-key-a"}, nil)
+	state := server.NewServerState(cfg, pool, "", keysFile)
+	alvus := httptest.NewServer(state.Handler())
+
+	// Add another key
+	resp, err := http.Post(alvus.URL+"/api/keys", "application/json",
+		strings.NewReader(`{"key":"plaintext-key-b"}`))
+	if err != nil {
+		t.Fatalf("POST /api/keys: %v", err)
+	}
+	resp.Body.Close()
+	alvus.Close()
+
+	// Read raw file — keys should be plaintext
+	data, err := os.ReadFile(keysFile)
+	if err != nil {
+		t.Fatalf("read keys.json: %v", err)
+	}
+	if !strings.Contains(string(data), "plaintext-key-a") {
+		t.Error("plaintext key 'plaintext-key-a' not found in unencrypted file")
+	}
+	if !strings.Contains(string(data), "plaintext-key-b") {
+		t.Error("plaintext key 'plaintext-key-b' not found in unencrypted file")
+	}
+}
