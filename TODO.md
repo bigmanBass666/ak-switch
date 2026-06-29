@@ -27,6 +27,7 @@
 - [x] **启动配置友好校验** — 中文错误消息 + 标准退出码（配置错 exit 2、运行时错 exit 1、系统错 exit 3）
 - [x] **README 重写** — 覆盖熔断器 / Metrics / 管理 API / 配置校验 / 压测 / 测试策略，450+ 行完整文档
 - [x] **Key 持久化存储** — `internal/keypool/store.go` 模块（LoadKeysFromFile/SaveKeysFromFile/LoadFullStore/SaveFullStore），管理 API 写操作自动同步 `keys.json`，重启恢复状态，3 个集成验收测试
+- [x] **Docker Compose 完整部署** — 三服务架构（Alvus + Prometheus + Grafana），持久化数据卷，预置监控面板，内部网络隔离
 
 ### 127 测试覆盖
 
@@ -121,12 +122,7 @@
 
 ## P2 — 值得做（优化打磨）
 
-### Docker Compose 完整部署
-
-- （可选）Prometheus + Grafana 监控面板
-- （可选）Dashboard 独立服务
-- 持久化数据卷（日志、配置）
-- 网络配置（内部通信、外部暴露）
+### ~Docker Compose 完整部署~ ✅ 已完成
 
 ### 安全性增强
 

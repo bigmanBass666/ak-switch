@@ -31,3 +31,8 @@ test/load/results/*.html
 # Spec documents (project-level, not committed to repo)
 .agents/
 
+# Docker volumes (local runtime state — do not commit)
+data/
+prometheus-data/
+grafana-data/
+

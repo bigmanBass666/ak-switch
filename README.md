@@ -326,9 +326,43 @@ docker build -t alvus .
 docker run --rm alvus --help
 ```
 
-### HEALTHCHECK
+### 健康检查
 
-容器内置健康检查（每 30 秒探测 `/health` 端点），不健康时自动重启。
+容器内置 Docker HEALTHCHECK（每 30 秒探测 `/health` 端点），不健康时自动重启。
+
+### 完整监控栈
+
+Alvus 自带 Prometheus 指标，搭配预置的 Grafana 面板开箱即用：
+
+```bash
+# 启动完整栈（Alvus + Prometheus + Grafana）
+docker compose up -d
+
+# 访问 Grafana 面板
+open http://localhost:3001
+```
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| Alvus | `3000` | API Key 代理 |
+| Prometheus | `9090` | 指标采集（`alvus:3000/metrics`） |
+| Grafana | `3001` | 预置监控面板 |
+
+**预置 Grafana 面板包含：**
+- 请求速率（按状态码/Key 分布）
+- 请求延迟 p50 / p95 / p99
+- Key 池状态（活跃/冷却/禁用）
+- 上游熔断器状态
+- 上游错误按类型分布
+- 健康检查成功率与延迟
+
+自定义端口：
+```bash
+# 改变映射端口
+PORT=3000 PROMETHEUS_PORT=9090 GRAFANA_PORT=3001 docker compose up -d
+```
+
+> 注意：Grafana 面板无需登录（匿名只读访问），首次启动自动加载预置数据源和仪表盘。
 
 ---
 

@@ -1,4 +1,5 @@
 services:
+  # ── Alvus Proxy ──────────────────────────────────────
   alvus:
     build: .
     ports:
@@ -6,9 +7,63 @@ services:
     environment:
       # Force container-internal port to 3000 regardless of what .env says
       - PORT=3000
+      # Keys file inside data volume for persistence across restarts
+      - KEYS_FILE=data/keys.json
     env_file: .env
     volumes:
       # Mount .env for hot-reload (fsnotify detects inotify changes inside container)
-      - ./.env:/app/.env
+      - ./.env:/app/.env:ro
+      # Persistent data volume for keys.json
+      - alvus-data:/app/data
     working_dir: /app
     restart: unless-stopped
+    networks:
+      - alvus-net
+
+  # ── Prometheus ───────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    restart: unless-stopped
+    networks:
+      - alvus-net
+    depends_on:
+      - alvus
+
+  # ── Grafana ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      # Allow anonymous access (read-only, for dashboard sharing)
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      # Disable auto-update prompts in a provisioning-only setup
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      # Auto-provision Prometheus datasource and pre-built dashboard
+      - ./grafana/provisioning/:/etc/grafana/provisioning/:ro
+      # Persistent storage for dashboards and settings
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    networks:
+      - alvus-net
+    depends_on:
+      - prometheus
+
+# ── Volumes ──────────────────────────────────────────
+volumes:
+  alvus-data:
+  prometheus-data:
+  grafana-data:
+
+# ── Networks ─────────────────────────────────────────
+networks:
+  alvus-net:
+    driver: bridge
