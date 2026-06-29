@@ -29,6 +29,7 @@
 - [x] **Key 持久化存储** — `internal/keypool/store.go` 模块（LoadKeysFromFile/SaveKeysFromFile/LoadFullStore/SaveFullStore），管理 API 写操作自动同步 `keys.json`，重启恢复状态，3 个集成验收测试
 - [x] **优雅关闭（Graceful Shutdown）** — `http.Server.Shutdown()` 替代直接退出，`sync.WaitGroup` 跟踪后台 goroutine 生命周期，30s 超时等待活跃请求完成，3 个验收测试
 - [x] **上游健康检查** — 主动健康检查 goroutine 定期探测上游（HEAD），配合 UpstreamCircuitBreaker 自动恢复；3 个配置字段（间隔/路径/超时）+ 3 个新 Prometheus 指标 + /health 端点增强 + 5 个验收测试
+- [x] **Docker Compose 完整部署** — 三服务架构（Alvus + Prometheus + Grafana），持久化数据卷，预置监控面板，内部网络隔离
 
 ### 135 测试覆盖
 
@@ -47,7 +48,8 @@
 | `metrics_verification_test.go` | 6 | **集成验收测试** |
 | `graceful_shutdown_test.go` | 3 | **集成验收测试** |
 | `healthcheck_test.go` | 5 | **集成验收测试** |
-| **总计** | **135** | |
+| `docker_compose_test.go` | 5 | **集成验收测试** |
+| **总计** | **140** | |
 
 ## 🔜 短期计划
 
@@ -116,12 +118,7 @@ _全部完成，暂无短期计划。_
 
 ## P2 — 值得做（优化打磨）
 
-### Docker Compose 完整部署
-
-- （可选）Prometheus + Grafana 监控面板
-- （可选）Dashboard 独立服务
-- 持久化数据卷（日志、配置）
-- 网络配置（内部通信、外部暴露）
+### ~Docker Compose 完整部署~ ✅ 已完成
 
 ### 安全性增强
 
