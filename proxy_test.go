@@ -1202,6 +1202,56 @@ func TestCB_UpstreamCircuitBreakerOpens(t *testing.T) {
 	t.Logf("upstream call count: %d (threshold=3, should be ~3)", count)
 }
 
+// ---------------------------------------------------------------------------
+// 22. All keys disabled via API — returns 503 immediately (no CPU spin)
+// ---------------------------------------------------------------------------
+
+func TestProxy_AllDisabled_Returns503(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b"}, 10, 60)
+	defer alvus.Close()
+
+	// Disable both keys via API
+	for _, idx := range []string{"1", "2"} {
+		resp, err := http.Post(alvus.URL+"/api/keys/"+idx+"/disable", "application/json", nil)
+		if err != nil {
+			t.Fatalf("POST /api/keys/%s/disable: %v", idx, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("POST /api/keys/%s/disable: got %d, want 200", idx, resp.StatusCode)
+		}
+	}
+
+	// Send proxy request — should get 503 immediately, not spin on retries
+	resp, err := http.Get(alvus.URL + "/v1/models")
+	if err != nil {
+		t.Fatalf("GET /v1/models: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 Service Unavailable when all keys disabled, got %d", resp.StatusCode)
+	}
+
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode JSON error response: %v", err)
+	}
+	if body.Error.Code != "ALL_KEYS_INVALID" {
+		t.Errorf("expected error.code ALL_KEYS_INVALID, got %q", body.Error.Code)
+	}
+}
+
 	// ---------------------------------------------------------------------------
 	// Key persistence tests
 	// ---------------------------------------------------------------------------

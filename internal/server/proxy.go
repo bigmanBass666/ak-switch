@@ -118,6 +118,12 @@ func (s *ServerState) proxyHandler(w http.ResponseWriter, r *http.Request) {
 		idx, key, ok := pool.Next()
 		if !ok {
 			wait := pool.TimeUntilAvailable()
+			if wait < 0 {
+				// All keys disabled or pool empty — no key will ever become available.
+				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+				recordMetrics("5xx", "")
+				return
+			}
 			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
 			slog.Warn("all keys cooling", "wait", (wait + jitter).Round(time.Second), "attempt", attempt+1, "max", cfg.MaxRetries)
 			time.Sleep(wait + jitter)

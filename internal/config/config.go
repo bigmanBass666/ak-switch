@@ -5,12 +5,14 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
-	"encoding/hex"
+
+	"alvus/internal/utils"
 )
 
 // Exit codes for controlled process termination.
@@ -357,25 +359,18 @@ func (c *Config) Validate() error {
 }
 
 // Sanitized returns a copy of the Config with sensitive fields masked.
-// API keys in Keys are masked to first 4 chars + "..." + last 2 chars.
+// API keys in Keys are masked via utils.MaskKey — first 4 chars + "..." + last 4 chars.
 // KeyNames are not sensitive and are copied as-is.
 func (c *Config) Sanitized() *Config {
 	s := *c // shallow copy
 	s.Keys = make([]string, len(c.Keys))
 	for i, k := range c.Keys {
-		s.Keys[i] = maskKey(k)
+		s.Keys[i] = utils.MaskKey(k)
 	}
 	s.KeyNames = make([]string, len(c.KeyNames))
 	copy(s.KeyNames, c.KeyNames)
 	s.EncryptionKey = nil // excluded from sanitized output
 	return &s
-}
-
-func maskKey(key string) string {
-	if len(key) <= 6 {
-		return "****"
-	}
-	return key[:4] + "..." + key[len(key)-2:]
 }
 
 // Diff returns a list of ConfigChange entries describing what differs
@@ -536,7 +531,7 @@ func maskedSliceWithNames(keys []string, names []string) []string {
 		if i < len(names) {
 			n = names[i]
 		}
-		result[i] = joinKeyName(maskKey(k), n)
+		result[i] = joinKeyName(utils.MaskKey(k), n)
 	}
 	return result
 }

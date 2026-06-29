@@ -293,5 +293,8 @@ func ReloadConfig() (*config.Config, *keypool.KeyPool, error) {
 	cfg.Keys = keys
 	cfg.KeyNames = names
 
+	// Sync encryption key for key pool persistence
+	keypool.SetEncryptionKey(cfg.EncryptionKey)
+
 	return cfg, keypool.NewKeyPool(keys, names), nil
 }

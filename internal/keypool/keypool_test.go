@@ -176,6 +176,36 @@ func TestAddKeyWithName(t *testing.T) {
 	}
 }
 
+func TestTimeUntilAvailable_AllDisabled(t *testing.T) {
+	p := NewKeyPool([]string{"key-a", "key-b"}, nil)
+	p.Disable(0)
+	p.Disable(1)
+	wait := p.TimeUntilAvailable()
+	if wait >= 0 {
+		t.Errorf("TimeUntilAvailable() = %v, want negative value when all keys disabled", wait)
+	}
+}
+
+func TestTimeUntilAvailable_AllCooling(t *testing.T) {
+	p := NewKeyPool([]string{"key-a", "key-b"}, nil)
+	p.Cooldown(0, 10*time.Minute)
+	p.Cooldown(1, 10*time.Minute)
+	wait := p.TimeUntilAvailable()
+	if wait <= 0 {
+		t.Errorf("TimeUntilAvailable() = %v, want positive value when all keys cooling", wait)
+	}
+}
+
+func TestTimeUntilAvailable_SomeActive(t *testing.T) {
+	p := NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
+	p.Disable(0)
+	p.Cooldown(1, 10*time.Minute)
+	wait := p.TimeUntilAvailable()
+	if wait != 0 {
+		t.Errorf("TimeUntilAvailable() = %v, want 0 when at least one key is ready", wait)
+	}
+}
+
 func BenchmarkKeyPoolNext(b *testing.B) {
 	keySet := []string{"ka", "kb", "kc", "kd", "ke", "kf", "kg", "kh", "ki", "kj"}
 	for _, n := range []int{1, 5, 10} {

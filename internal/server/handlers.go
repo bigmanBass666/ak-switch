@@ -3,7 +3,6 @@ package server
 import (
 	"alvus/internal/circuitbreaker"
 	"alvus/internal/utils"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -74,8 +73,7 @@ func (s *ServerState) configHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		if cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(cfg.AdminToken)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		if !s.adminAuth(cfg, w, r) {
 			return
 		}
 		var payload ConfigPayload
@@ -183,9 +181,10 @@ func (s *ServerState) keysHandler(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	// Admin token check for POST and DELETE
-	if (r.Method == http.MethodPost || r.Method == http.MethodDelete) && cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(cfg.AdminToken)) != 1 {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+	if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+		if !s.adminAuth(cfg, w, r) {
+			return
+		}
 	}
 
 	switch r.Method {
@@ -236,7 +235,11 @@ func (s *ServerState) keysHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
-		if err := pool.RemoveKey(body.Index); err != nil {
+		if body.Index < 1 || body.Index > len(pool.Keys()) {
+			s.respondJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid index"})
+			return
+		}
+		if err := pool.RemoveKey(body.Index - 1); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -256,8 +259,7 @@ func (s *ServerState) healthHandler(w http.ResponseWriter, r *http.Request) {
 	upCB := s.upCB
 	s.mu.RUnlock()
 
-	if cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(cfg.AdminToken)) != 1 {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	if !s.adminAuth(cfg, w, r) {
 		return
 	}
 
@@ -311,8 +313,7 @@ func (s *ServerState) clearHandler(w http.ResponseWriter, r *http.Request) {
 	cfg := s.cfg
 	s.mu.RUnlock()
 
-	if cfg.AdminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(cfg.AdminToken)) != 1 {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	if !s.adminAuth(cfg, w, r) {
 		return
 	}
 	if r.Method != http.MethodPost {

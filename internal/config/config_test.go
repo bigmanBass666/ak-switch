@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"alvus/internal/utils"
 )
 
 // resetEnv cleans up all config-related env vars to prevent leakage between tests.
@@ -394,21 +396,31 @@ func TestSanitized(t *testing.T) {
 		t.Error("original key mutated")
 	}
 
-	// Sanitized copy: first 4 + "..." + last 2 chars (per spec)
-	if s.Keys[0] != "nvap...W1" {
-		t.Errorf("sanitized Keys[0] = %q, want %q", s.Keys[0], "nvap...W1")
+	// Sanitized copy: first 4 + "..." + last 4 chars (per utils.MaskKey)
+	if s.Keys[0] != "nvap...sGW1" {
+		t.Errorf("sanitized Keys[0] = %q, want %q", s.Keys[0], "nvap...sGW1")
 	}
 	if s.Keys[1] != "****" {
 		t.Errorf("short key masked to %q, want %q", s.Keys[1], "****")
 	}
-	if s.Keys[2] != "nvap...3Q" {
-		t.Errorf("sanitized Keys[2] = %q, want %q", s.Keys[2], "nvap...3Q")
+	if s.Keys[2] != "nvap...Zu3Q" {
+		t.Errorf("sanitized Keys[2] = %q, want %q", s.Keys[2], "nvap...Zu3Q")
 	}
 
 	// Sanitized must not share underlying array with original
 	s.Keys[0] = "tampered"
 	if cfg.Keys[0] == "tampered" {
 		t.Error("Sanitized() returned a view into original, not a copy")
+	}
+}
+
+func TestSanitized_UsesUtilsMaskKey(t *testing.T) {
+	key := "sk-abcdefghijklmn"
+	cfg := &Config{Keys: []string{key}}
+	s := cfg.Sanitized()
+	expected := utils.MaskKey(key)
+	if s.Keys[0] != expected {
+		t.Errorf("Sanitized Keys[0] = %q, want %q (must match utils.MaskKey)", s.Keys[0], expected)
 	}
 }
 
@@ -465,13 +477,13 @@ func TestDiff(t *testing.T) {
 	if c, ok := changeMap["API_KEYS"]; !ok {
 		t.Error("Diff missing API_KEYS change")
 	} else {
-		// Old: two keys masked individually and joined: "nvap...y1,nvap...y2"
-		// New: single key masked: "nvap...y1"
-		if c.OldValue != "nvap...y1,nvap...y2" {
-			t.Errorf("API_KEYS old (masked) = %q, want %q", c.OldValue, "nvap...y1,nvap...y2")
+		// Old: two keys masked individually and joined: "nvap...key1,nvap...key2"
+		// New: single key masked: "nvap...key1"
+		if c.OldValue != "nvap...key1,nvap...key2" {
+			t.Errorf("API_KEYS old (masked) = %q, want %q", c.OldValue, "nvap...key1,nvap...key2")
 		}
-		if c.NewValue != "nvap...y1" {
-			t.Errorf("API_KEYS new (masked) = %q, want %q", c.NewValue, "nvap...y1")
+		if c.NewValue != "nvap...key1" {
+			t.Errorf("API_KEYS new (masked) = %q, want %q", c.NewValue, "nvap...key1")
 		}
 	}
 
@@ -589,8 +601,8 @@ func TestDiff_NamedKeys(t *testing.T) {
 		t.Error("Diff should include API_KEYS")
 	} else {
 		// Should contain masked key names in the serialized form
-		if c != "nvap...y3==新key" {
-			t.Errorf("API_KEYS new value = %q, want %q", c, "nvap...y3==新key")
+		if c != "****==新key" {
+			t.Errorf("API_KEYS new value = %q, want %q", c, "****==新key")
 		}
 
 		// Check old value also has names

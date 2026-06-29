@@ -284,8 +284,8 @@ func TestKeysDelete(t *testing.T) {
 	}
 	beforeCount := len(before)
 
-	// DELETE 移除 index=0 的 key
-	reqBody := `{"index":0}`
+	// DELETE 移除 index=1 (1-based) 的 key
+	reqBody := `{"index":1}`
 	req, err := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
 	if err != nil {
 		t.Fatal(err)
@@ -885,5 +885,221 @@ func TestLogLevelHandler_Unauthorized(t *testing.T) {
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected status 401, got %d", resp.StatusCode)
+	}
+}
+
+// ── Keys DELETE — 1-based index validation ─────────────
+
+func TestKeysHandlerDelete_OneBased(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	// GET initial count
+	resp, err := http.Get(alvus.URL + "/api/keys")
+	if err != nil {
+		t.Fatalf("GET /api/keys: %v", err)
+	}
+	defer resp.Body.Close()
+	var before []map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&before); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	beforeCount := len(before)
+
+	// DELETE index=1 (1-based) → should succeed
+	reqBody := `{"index":1}`
+	req, err := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("expected status 200, got %d", resp2.StatusCode)
+	}
+
+	// GET after delete — count should be reduced by 1
+	resp3, err := http.Get(alvus.URL + "/api/keys")
+	if err != nil {
+		t.Fatalf("GET /api/keys: %v", err)
+	}
+	defer resp3.Body.Close()
+
+	var after []map[string]interface{}
+	if err := json.NewDecoder(resp3.Body).Decode(&after); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(after) != beforeCount-1 {
+		t.Errorf("expected %d keys after DELETE, got %d", beforeCount-1, len(after))
+	}
+}
+
+func TestKeysHandlerDelete_IndexZeroReturns400(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	reqBody := `{"index":0}`
+	req, err := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected status 400 for index=0, got %d", resp.StatusCode)
+	}
+}
+
+func TestKeysHandlerDelete_IndexNegativeReturns400(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	reqBody := `{"index":-1}`
+	req, err := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected status 400 for index=-1, got %d", resp.StatusCode)
+	}
+}
+
+func TestKeysHandlerDelete_IndexTooLargeReturns400(t *testing.T) {
+	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+	defer alvus.Close()
+
+	reqBody := `{"index":999}`
+	req, err := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected status 400 for index=999, got %d", resp.StatusCode)
+	}
+}
+
+// ── DELETE /api/keys — unauthenticated ──────────────────
+
+func TestKeysHandlerDelete_Unauthenticated(t *testing.T) {
+	cfg := &config.Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        19999,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "my-token",
+		Keys:        []string{"key-a", "key-b", "key-c"},
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
+	state := server.NewServerState(cfg, pool, "", "")
+	alvus := httptest.NewServer(state.Handler())
+	defer alvus.Close()
+
+	// Without token → 401
+	reqBody := `{"index":1}`
+	req, _ := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys (no auth): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// With correct token → 200
+	req, _ = http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Token", "my-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys (correct token): %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
+	}
+}
+
+// ── Config POST — unauthenticated ──────────────────────
+
+func TestConfigHandlerPost_Unauthenticated(t *testing.T) {
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(origDir)
+
+	// Write initial .env for ReloadConfig
+	envContent := "PORT=19999\nTARGET_BASE_URL=http://localhost:19999\nGENAI_BASE_URL=http://localhost:19999\nAPI_KEYS=key-a,key-b\nCOOLDOWN_SEC=60\nMAX_RETRIES=3\n"
+	if err := os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(envContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		TargetBase:  "http://localhost:19999",
+		GenaiBase:   "http://localhost:19999",
+		Port:        19999,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		AdminToken:  "my-token",
+		Keys:        []string{"key-a", "key-b"},
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
+	state := server.NewServerState(cfg, pool, "", "")
+	alvus := httptest.NewServer(state.Handler())
+	defer alvus.Close()
+
+	// Without token → 401
+	reqBody := `{"targetBase":"http://example.com","genaiBase":"http://genai.example.com","keys":["new-key"]}`
+	resp, err := http.Post(alvus.URL+"/api/config", "application/json", strings.NewReader(reqBody))
+	if err != nil {
+		t.Fatalf("POST /api/config (no auth): %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	}
+
+	// With correct token → 200
+	req, _ := http.NewRequest("POST", alvus.URL+"/api/config", strings.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Token", "my-token")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /api/config (correct token): %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
 	}
 }
