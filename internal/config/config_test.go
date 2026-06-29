@@ -14,7 +14,7 @@ func resetEnv() {
 		"COOLDOWN_SEC", "API_KEYS", "KEY", "KEY1", "KEY2", "KEY3",
 		"KEY4", "KEY5", "KEYA", "KEYB",
 		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC",
-		"UPSTREAM_CB_THRESHOLD",
+		"UPSTREAM_CB_THRESHOLD", "KEYS_FILE",
 	} {
 		os.Unsetenv(key)
 	}
@@ -79,6 +79,9 @@ GENAI_MODEL=claude-sonnet
 	}
 	if len(cfg.Keys) != 2 || cfg.Keys[0] != "nvapi-key1" || cfg.Keys[1] != "nvapi-key2" {
 		t.Errorf("Keys = %v, want [nvapi-key1 nvapi-key2]", cfg.Keys)
+	}
+	if cfg.KeysFile != "keys.json" {
+		t.Errorf("KeysFile = %q, want %q", cfg.KeysFile, "keys.json")
 	}
 }
 
@@ -173,6 +176,9 @@ func TestLoad_OptionalDefaults(t *testing.T) {
 	}
 	if cfg.UpstreamCBThreshold != 5 {
 		t.Errorf("UpstreamCBThreshold default = %d, want 5", cfg.UpstreamCBThreshold)
+	}
+	if cfg.KeysFile != "keys.json" {
+		t.Errorf("KeysFile default = %q, want %q", cfg.KeysFile, "keys.json")
 	}
 }
 

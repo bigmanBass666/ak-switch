@@ -50,6 +50,7 @@ type Config struct {
 	CooldownSec     int      // Cooldown seconds after rate-limit (default 60)
 	Keys            []string // API keys (at least one required)
 	KeyNames        []string // Corresponding key names (empty string if unnamed), same length as Keys
+	KeysFile        string   // JSON file path for key persistence (default "keys.json")
 
 	BackoffCapSec       int     // Key 退避上限(秒)，达到此值自动禁用 (default 120)
 	BackoffMultiplier   float64 // 指数退避倍数 (default 2)
@@ -68,6 +69,7 @@ func DefaultConfig() *Config {
 		BackoffMultiplier:   2,
 		CBResetSec:          30,
 		UpstreamCBThreshold: 5,
+		KeysFile:            "keys.json",
 	}
 }
 
@@ -92,7 +94,8 @@ func DefaultConfig() *Config {
 //   - BACKOFF_MULTIPLIER (float, default 2) — 指数退避倍数
 //   - CB_RESET_SEC (int, default 30) — 上游熔断器 OPEN→HALF_OPEN 超时(秒)
 //   - UPSTREAM_CB_THRESHOLD (int, default 5) — 上游熔断器连续失败触发阈值
-func Load(envPath string) (*Config, error) {
+//   - KEYS_FILE (string, default "keys.json") — JSON 文件路径，用于持久化存储 API Key 状态
+	func Load(envPath string) (*Config, error) {
 	if envPath != "" {
 		if err := loadDotEnv(envPath); err != nil {
 			return nil, &ConfigError{
@@ -196,6 +199,11 @@ func Load(envPath string) (*Config, error) {
 			return nil, &ConfigError{Category: "config", Message: fmt.Sprintf("配置错误: UPSTREAM_CB_THRESHOLD=\"%s\" 不是有效整数，有效范围 2-100", v)}
 		}
 		cfg.UpstreamCBThreshold = threshold
+	}
+
+	// KeysFile
+	if v := os.Getenv("KEYS_FILE"); v != "" {
+		cfg.KeysFile = v
 	}
 
 	// Keys: API_KEYS is primary, then fallback to KEY, KEY1-KEY5, KEYA, KEYB

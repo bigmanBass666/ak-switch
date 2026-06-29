@@ -191,6 +191,7 @@ func (s *ServerState) keysHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		idx := pool.AddKey(body.Key, body.KeyName)
+		s.PersistKeys()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"index": idx,
@@ -210,6 +211,7 @@ func (s *ServerState) keysHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		s.PersistKeys()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "removed"})
 
@@ -355,7 +357,7 @@ func (s *ServerState) disableKeyHandler(w http.ResponseWriter, r *http.Request) 
 		s.respondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
 		return
 	}
-	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+	s.PersistKeys()
 	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -399,5 +401,6 @@ func (s *ServerState) deleteKeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pool.RemoveKey(idx)
+	s.PersistKeys()
 	s.respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

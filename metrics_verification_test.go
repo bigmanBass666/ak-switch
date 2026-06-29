@@ -299,7 +299,7 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 		CooldownSec: 2,
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 

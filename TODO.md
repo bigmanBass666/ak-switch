@@ -26,49 +26,37 @@
 - [x] **main.go 拆包** — 977 行 → 98 行，`internal/server/` 包 5 文件拆分（server.go / handlers.go / proxy.go / middleware.go / lifecycle.go）
 - [x] **启动配置友好校验** — 中文错误消息 + 标准退出码（配置错 exit 2、运行时错 exit 1、系统错 exit 3）
 - [x] **README 重写** — 覆盖熔断器 / Metrics / 管理 API / 配置校验 / 压测 / 测试策略，450+ 行完整文档
+- [x] **Key 持久化存储** — `internal/keypool/store.go` 模块（LoadKeysFromFile/SaveKeysFromFile/LoadFullStore/SaveFullStore），管理 API 写操作自动同步 `keys.json`，重启恢复状态，3 个集成验收测试
 
-### 115 测试覆盖
+### 127 测试覆盖
 
 | 文件 | 测试数 | 类型 |
 |------|--------|------|
 | `internal/config/config_test.go` | 24 | 单元测试 |
 | `internal/keypool/keypool_test.go` | 12 | 单元测试 |
+| `internal/keypool/store_test.go` | 9 | 单元测试 |
 | `internal/logstore/logstore_test.go` | 5 | 单元测试 |
 | `internal/circuitbreaker/key_test.go` | 10 | 单元测试 |
 | `internal/circuitbreaker/upstream_test.go` | 9 | 单元测试 |
 | `handlers_test.go` | 16 | Handler 测试 |
 | `logstore_test.go` | 4 | Handler 测试 |
-| `proxy_test.go` | 25 | **集成验收测试** |
+| `proxy_test.go` | 28 | **集成验收测试** |
 | `integration_test.go` | 4 | **集成测试** |
 | `metrics_verification_test.go` | 6 | **集成验收测试** |
-| **总计** | **115** | |
+| **总计** | **127** | |
 
-## 🔜 短期计划（待讨论决策）
+## 🔜 短期计划
 
-以下为已完成功能基础上，近期可推进的方向，等待讨论确认顺序与范围。
+### E. 优雅关闭（Graceful Shutdown）
 
-### B. 智能重试与退避 ✅
+**现状：** 收到 SIGINT/SIGTERM 直接 `os.Exit`，正在处理的请求被掐断。对流式响应（SSE）尤其不友好。
 
-**两层熔断器**（`internal/circuitbreaker/`）：
-- **Key 级熔断器**（KeyCircuitBreaker）— 三态（CLOSED/OPEN/PERMA），429 时指数退避（`base × multiplier^attempt + jitter`），退避达 `BACKOFF_CAP_SEC` 自动 PERMA（日额度耗尽检测），401/403 直接 PERMA，成功恢复后归零
-- **上游级熔断器**（UpstreamCircuitBreaker）— 三态（CLOSED/OPEN/HALF_OPEN），502/503 连续达阈值触发熔断，超时后进入 HALF_OPEN 单次探测，探测成功恢复/失败重熔
-- **502/503/网络错误不惩罚 Key** — Key 是无辜的，只有上游熔断器记录故障
-- **全部冷却时加随机 jitter** — 替代固定 `wait + 500ms`
-- **上游熔断 OPEN 时 fail fast** — 跳过发请求，直接退避等待
-- 新增配置项：`BACKOFF_CAP_SEC` / `BACKOFF_MULTIPLIER` / `CB_RESET_SEC` / `UPSTREAM_CB_THRESHOLD`
-- 4 个集成验收测试覆盖所有错误分支
+**建议：** 使用 `http.Server.Shutdown()` 替代直接退出：
+- 收到退出信号 → 停止监听 → 等待活跃请求完成（30s 超时）→ 退出
+- 配合 Docker 容器的 `STOP_TIMEOUT` 行为更安全
+- 与子进程管理模式下的信号传播兼容
 
-### C. 启动配置友好校验 ✅
-
-**人性化错误消息**：配置缺少/格式错误时使用中文消息 + 标准退出码（exit 2），字段名明确指出。
-- 集成验收测试覆盖缺失字段/格式错误/有效配置三场景
-
-### D. P0 收尾扫尾 ✅
-
-- [x] main.go 拆包 → `internal/server/` 5 文件拆分（977 行 → 98 行）
-- [x] README 补全（安装/配置/API 文档/熔断器/压测/测试策略）
-- [x] 确认所有 spec 文档与当前代码一致
-- [x] 清理 repo 中遗留的临时文件/未跟踪文件
+**估算：** ~30 分钟，零逻辑改动。
 
 ## ⚠️ 已知约束
 

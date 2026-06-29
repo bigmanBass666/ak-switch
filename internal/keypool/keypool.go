@@ -166,6 +166,17 @@ func (p *KeyPool) Disable(idx int) error {
 	return nil
 }
 
+// IsDisabled returns whether a key is disabled by index.
+// Returns false if the index is out of range.
+func (p *KeyPool) IsDisabled(idx int) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if idx < 0 || idx >= len(p.disabled) {
+		return false
+	}
+	return p.disabled[idx]
+}
+
 // ActiveCount returns the number of non-disabled keys.
 func (p *KeyPool) ActiveCount() int {
 	p.mu.Lock()

@@ -34,10 +34,11 @@ type ServerState struct {
 	keyCBs          []*circuitbreaker.KeyCircuitBreaker // per-key circuit breakers
 	upCB            *circuitbreaker.UpstreamCircuitBreaker
 	dashboardHTML   string
+	keysFile        string // path to keys.json for key persistence
 }
 
 // NewServerState creates a fully initialized ServerState, registering all HTTP routes.
-func NewServerState(cfg *config.Config, pool *keypool.KeyPool, dashboardHTML string) *ServerState {
+func NewServerState(cfg *config.Config, pool *keypool.KeyPool, dashboardHTML string, keysFile string) *ServerState {
 	reg, m := alvusmetrics.NewRegistry()
 
 	// Initialize KeyCircuitBreakers (one per key)
@@ -90,6 +91,7 @@ func NewServerState(cfg *config.Config, pool *keypool.KeyPool, dashboardHTML str
 		keyCBs:          keyCBs,
 		upCB:            upCB,
 		dashboardHTML:   dashboardHTML,
+		keysFile:        keysFile,
 	}
 	s.mux.HandleFunc("/health", s.healthHandler)
 	s.mux.HandleFunc("/logs", s.logsHandler)
@@ -119,6 +121,29 @@ func (s *ServerState) Metrics() *alvusmetrics.Metrics {
 	return s.metrics
 }
 
+// PersistKeys saves the current key pool state to the keys file.
+// Called after key mutations through the management API.
+func (s *ServerState) PersistKeys() {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+	if cfg.KeysFile == "" {
+		return
+	}
+	keys := s.pool.Keys()
+	entries := make([]keypool.KeyEntry, len(keys))
+	for i := range keys {
+		entries[i] = keypool.KeyEntry{
+			Key:      keys[i],
+			Name:     s.pool.Name(i),
+			Disabled: s.pool.IsDisabled(i),
+		}
+	}
+	if err := keypool.SaveFullStore(cfg.KeysFile, &keypool.KeyStore{Keys: entries}); err != nil {
+		slog.Error("failed to persist keys", "path", cfg.KeysFile, "error", err)
+	}
+}
+
 // LoadConfig loads configuration from .env and validates it.
 func LoadConfig() (*config.Config, *keypool.KeyPool) {
 	cfg, err := config.Load(".env")
@@ -135,8 +160,28 @@ func LoadConfig() (*config.Config, *keypool.KeyPool) {
 		slog.Error(err.Error())
 		os.Exit(config.ExitCodeConfig)
 	}
+	// Merge keys from file if KeysFile is configured
+	keys := cfg.Keys
+	names := cfg.KeyNames
+	if cfg.KeysFile != "" {
+		fileKeys, fileNames, err := keypool.LoadKeysFromFile(cfg.KeysFile)
+		if err != nil {
+			slog.Warn("load keys file failed, using env keys", "path", cfg.KeysFile, "error", err)
+		} else if fileKeys != nil {
+			// File exists - use its keys as the source of truth
+			cfg.Keys = fileKeys
+			cfg.KeyNames = fileNames
+			keys = fileKeys
+			names = fileNames
+		} else {
+			// File not found - create it from env keys
+			if err := keypool.SaveKeysToFile(cfg.KeysFile, keys, names); err != nil {
+				slog.Warn("create keys file failed", "path", cfg.KeysFile, "error", err)
+			}
+		}
+	}
 	slog.Info("config loaded", "keys", len(cfg.Keys), "target", cfg.TargetBase, "genai", cfg.GenaiBase)
-	return cfg, keypool.NewKeyPool(cfg.Keys, cfg.KeyNames)
+	return cfg, keypool.NewKeyPool(keys, names)
 }
 
 // ReloadConfig reloads configuration from .env after clearing environment variables.
@@ -146,6 +191,7 @@ func ReloadConfig() (*config.Config, *keypool.KeyPool, error) {
 		"TARGET_BASE_URL", "GENAI_BASE_URL", "PORT", "COOLDOWN_SEC", "ADMIN_TOKEN",
 		"MAX_RETRIES", "DISABLE_THINKING", "GENAI_MODEL", "LOG_LEVEL",
 		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC", "UPSTREAM_CB_THRESHOLD",
+			"KEYS_FILE",
 	} {
 		os.Unsetenv(k)
 	}
@@ -156,5 +202,22 @@ func ReloadConfig() (*config.Config, *keypool.KeyPool, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, nil, fmt.Errorf("reloaded config invalid: %w", err)
 	}
-	return cfg, keypool.NewKeyPool(cfg.Keys, cfg.KeyNames), nil
+	// Merge keys from file if KeysFile is configured
+	keys := cfg.Keys
+	names := cfg.KeyNames
+	if cfg.KeysFile != "" {
+		fileKeys, fileNames, err := keypool.LoadKeysFromFile(cfg.KeysFile)
+		if err != nil {
+			slog.Warn("load keys file failed", "path", cfg.KeysFile, "error", err)
+		} else if fileKeys != nil {
+			keys = fileKeys
+			names = fileNames
+		}
+		// NOTE: during reload, don't auto-create the file
+		// (it should already exist if server has been running)
+	}
+	cfg.Keys = keys
+	cfg.KeyNames = names
+
+	return cfg, keypool.NewKeyPool(keys, names), nil
 }

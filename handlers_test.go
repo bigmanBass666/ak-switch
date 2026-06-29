@@ -25,7 +25,7 @@ func newTestServer(keys []string) *httptest.Server {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool(keys, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	return httptest.NewServer(state.Handler())
 }
 
@@ -148,7 +148,7 @@ func TestConfigPost(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -363,7 +363,7 @@ func TestHealthHandlerAuth(t *testing.T) {
 		AdminToken:  "my-token",
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -422,7 +422,7 @@ func TestClearHandlerAuth(t *testing.T) {
 		AdminToken:  "my-token",
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -568,7 +568,7 @@ func TestDisableKeyHandlerAuth(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -718,7 +718,7 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -782,7 +782,7 @@ func TestReloadHandler(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 

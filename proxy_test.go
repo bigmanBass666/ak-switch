@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -32,7 +34,7 @@ func setupAlvus(tb testing.TB, upstream *httptest.Server, poolKeys []string, max
 		CooldownSec: cooldownSec,
 	}
 	pool := keypool.NewKeyPool(poolKeys, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	return httptest.NewServer(state.Handler())
 }
 
@@ -422,7 +424,7 @@ func TestProxyWithKeyManagement(t *testing.T) {
 		Keys:        []string{"initial-key"},
 	}
 	pool := keypool.NewKeyPool([]string{"initial-key"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -919,7 +921,7 @@ func TestProxyError_UpstreamError(t *testing.T) {
 		CooldownSec: 60,
 	}
 	pool := keypool.NewKeyPool([]string{"test-key-a"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	alvus := httptest.NewServer(state.Handler())
 	defer alvus.Close()
 
@@ -988,7 +990,7 @@ func TestCB_RateLimitRecovery(t *testing.T) {
 		UpstreamCBThreshold: 5,
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
@@ -1031,7 +1033,7 @@ func TestCB_QuotaExhausted(t *testing.T) {
 		UpstreamCBThreshold: 10,
 	}
 	pool := keypool.NewKeyPool([]string{"single-key"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
@@ -1085,7 +1087,7 @@ func TestCB_UpstreamErrorNoKeyPenalty(t *testing.T) {
 		UpstreamCBThreshold: 10,
 	}
 	pool := keypool.NewKeyPool([]string{"test-key"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
@@ -1170,7 +1172,7 @@ func TestCB_UpstreamCircuitBreakerOpens(t *testing.T) {
 		UpstreamCBThreshold: 3,
 	}
 	pool := keypool.NewKeyPool([]string{"test-key"}, nil)
-	state := server.NewServerState(cfg, pool, "")
+	state := server.NewServerState(cfg, pool, "", "")
 	ts := httptest.NewServer(state.Handler())
 	defer ts.Close()
 
@@ -1198,4 +1200,218 @@ func TestCB_UpstreamCircuitBreakerOpens(t *testing.T) {
 		t.Errorf("expected at most ~3 upstream calls after CB opens, got %d", count)
 	}
 	t.Logf("upstream call count: %d (threshold=3, should be ~3)", count)
+}
+
+	// ---------------------------------------------------------------------------
+	// Key persistence tests
+	// ---------------------------------------------------------------------------
+
+// TestKeyPersistence_AddKeyRestart verifies that adding a key via API
+// persists it to disk and survives a restart.
+func TestKeyPersistence_AddKeyRestart(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	tmpDir := t.TempDir()
+	keysFile := filepath.Join(tmpDir, "keys.json")
+
+	cfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		KeysFile:    keysFile,
+	}
+	pool := keypool.NewKeyPool([]string{"initial-key"}, nil)
+	state := server.NewServerState(cfg, pool, "", keysFile)
+	alvus := httptest.NewServer(state.Handler())
+
+	resp, err := http.Post(alvus.URL+"/api/keys", "application/json",
+		strings.NewReader(`{"key":"persistent-key","name":"test-key"}`))
+	if err != nil {
+		t.Fatalf("POST /api/keys: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /api/keys: got status %d, want 200", resp.StatusCode)
+	}
+
+	alvus.Close()
+
+	data, err := os.ReadFile(keysFile)
+	if err != nil {
+		t.Fatalf("read keys.json: %v", err)
+	}
+	t.Logf("keys.json content: %s", string(data))
+
+	if !strings.Contains(string(data), "persistent-key") {
+		t.Errorf("keys.json should contain 'persistent-key', got: %s", string(data))
+	}
+
+	// Simulate a restart: load keys from file
+	fileKeys, fileNames, err := keypool.LoadKeysFromFile(keysFile)
+	if err != nil {
+		t.Fatalf("LoadKeysFromFile: %v", err)
+	}
+	if fileKeys == nil {
+		t.Fatal("keys.json should exist after first server wrote it")
+	}
+
+	restoredPool := keypool.NewKeyPool(fileKeys, fileNames)
+	newCfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		KeysFile:    keysFile,
+	}
+	restoredState := server.NewServerState(newCfg, restoredPool, "", keysFile)
+	alvus2 := httptest.NewServer(restoredState.Handler())
+	defer alvus2.Close()
+
+	// Verify the key through the API
+	resp2, err := http.Get(alvus2.URL + "/api/keys")
+	if err != nil {
+		t.Fatalf("GET /api/keys: %v", err)
+	}
+	defer resp2.Body.Close()
+	body, _ := io.ReadAll(resp2.Body)
+
+	// Name is not masked in the API response
+	if !strings.Contains(string(body), "test-key") {
+		t.Errorf("restored pool should contain name 'test-key', got: %s", string(body))
+	}
+
+	// Key is masked (e.g. "pers...ey"); decode JSON to verify structure
+	var keyList []map[string]interface{}
+	if err := json.Unmarshal(body, &keyList); err != nil {
+		t.Fatalf("failed to decode /api/keys response: %v", err)
+	}
+	if len(keyList) != 2 {
+		t.Errorf("expected 2 keys after restoration, got %d", len(keyList))
+	}
+}
+
+// TestKeyPersistence_DeleteKeyRestart verifies that deleting a key via API
+// persists the removal and the key is gone after restart.
+func TestKeyPersistence_DeleteKeyRestart(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	tmpDir := t.TempDir()
+	keysFile := filepath.Join(tmpDir, "keys.json")
+
+	cfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		KeysFile:    keysFile,
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
+	state := server.NewServerState(cfg, pool, "", keysFile)
+	alvus := httptest.NewServer(state.Handler())
+
+	// Delete key-a via API (index 1 = first key, 1-based in URL)
+	req, err := http.NewRequest(http.MethodDelete, alvus.URL+"/api/keys/1", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /api/keys/1: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("DELETE /api/keys/1: got status %d, want 200", resp.StatusCode)
+	}
+
+	alvus.Close()
+
+	fileKeys, _, err := keypool.LoadKeysFromFile(keysFile)
+	if err != nil {
+		t.Fatalf("LoadKeysFromFile: %v", err)
+	}
+	if fileKeys == nil {
+		t.Fatal("keys.json should exist")
+	}
+	t.Logf("keys after delete: %v", fileKeys)
+
+	for _, k := range fileKeys {
+		if k == "key-a" {
+			t.Error("key-a should not be in the persisted keys after deletion")
+		}
+	}
+	found := false
+	for _, k := range fileKeys {
+		if k == "key-b" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("key-b should still be in the persisted keys")
+	}
+}
+
+// TestKeyPersistence_DisableKeyAndPersist verifies that disabling a key
+// via API persists the disabled state to disk.
+func TestKeyPersistence_DisableKeyAndPersist(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	tmpDir := t.TempDir()
+	keysFile := filepath.Join(tmpDir, "keys.json")
+
+	cfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  3,
+		CooldownSec: 60,
+		KeysFile:    keysFile,
+	}
+	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
+	state := server.NewServerState(cfg, pool, "", keysFile)
+	alvus := httptest.NewServer(state.Handler())
+
+	// Disable key 1 (first key, 1-based in URL) via API
+	resp, err := http.Post(alvus.URL+"/api/keys/1/disable", "application/json", nil)
+	if err != nil {
+		t.Fatalf("POST /api/keys/1/disable: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("got status %d, want 200", resp.StatusCode)
+	}
+
+	alvus.Close()
+
+	store, err := keypool.LoadFullStore(keysFile)
+	if err != nil {
+		t.Fatalf("LoadFullStore: %v", err)
+	}
+	if store == nil {
+		t.Fatal("keys.json should exist")
+	}
+
+	t.Logf("store contents: %+v", store.Keys)
+
+	for _, entry := range store.Keys {
+		if entry.Key == "key-a" && !entry.Disabled {
+			t.Error("key-a should be disabled in persisted store")
+		}
+	}
 }
