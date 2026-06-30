@@ -999,3 +999,109 @@ port = 8080
 		t.Errorf("Port = %d, want %d (first provider)", cfg.Port, 9090)
 	}
 }
+
+// ============================================================
+// LoadAllTomlProviders 测试
+// ============================================================
+
+func writeTempToml(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestLoadAllTomlProviders_MultiProvider(t *testing.T) {
+	content := `[provider.sensenova]
+target = "https://api.sensenova.com"
+genai = "https://ai.sensenova.com"
+port = 9090
+
+[provider.nvidia]
+target = "https://integrate.api.nvidia.com/v1"
+genai = "https://ai.api.nvidia.com"
+port = 8080
+`
+	path := writeTempToml(t, content)
+	providers, err := LoadAllTomlProviders(path)
+	if err != nil {
+		t.Fatalf("LoadAllTomlProviders() unexpected error: %v", err)
+	}
+	if len(providers) != 2 {
+		t.Fatalf("providers count = %d, want 2", len(providers))
+	}
+
+	sense, ok := providers["sensenova"]
+	if !ok {
+		t.Fatal("providers missing key 'sensenova'")
+	}
+	if sense.TargetBase != "https://api.sensenova.com" {
+		t.Errorf("sensenova TargetBase = %q, want %q", sense.TargetBase, "https://api.sensenova.com")
+	}
+	if sense.Port != 9090 {
+		t.Errorf("sensenova Port = %d, want %d", sense.Port, 9090)
+	}
+
+	nv, ok := providers["nvidia"]
+	if !ok {
+		t.Fatal("providers missing key 'nvidia'")
+	}
+	if nv.TargetBase != "https://integrate.api.nvidia.com/v1" {
+		t.Errorf("nvidia TargetBase = %q, want %q", nv.TargetBase, "https://integrate.api.nvidia.com/v1")
+	}
+	if nv.Port != 8080 {
+		t.Errorf("nvidia Port = %d, want %d", nv.Port, 8080)
+	}
+}
+
+func TestLoadAllTomlProviders_EmptyProvider(t *testing.T) {
+	content := `[server]
+port = 8080
+`
+	path := writeTempToml(t, content)
+	_, err := LoadAllTomlProviders(path)
+	if err == nil {
+		t.Error("LoadAllTomlProviders() expected error for missing [provider] section, got nil")
+	}
+}
+
+func TestLoadAllTomlProviders_MissingFile(t *testing.T) {
+	_, err := LoadAllTomlProviders("/nonexistent/path/config.toml")
+	if err == nil {
+		t.Error("LoadAllTomlProviders() expected error for non-existent file, got nil")
+	}
+}
+
+func TestLoadAllTomlProviders_Defaults(t *testing.T) {
+	content := `[provider.test]
+target = "https://api.example.com"
+genai = "https://ai.example.com"
+`
+	path := writeTempToml(t, content)
+	providers, err := LoadAllTomlProviders(path)
+	if err != nil {
+		t.Fatalf("LoadAllTomlProviders() unexpected error: %v", err)
+	}
+	cfg, ok := providers["test"]
+	if !ok {
+		t.Fatal("providers missing key 'test'")
+	}
+	if cfg.TargetBase != "https://api.example.com" {
+		t.Errorf("TargetBase = %q, want %q", cfg.TargetBase, "https://api.example.com")
+	}
+	if cfg.GenaiBase != "https://ai.example.com" {
+		t.Errorf("GenaiBase = %q, want %q", cfg.GenaiBase, "https://ai.example.com")
+	}
+	if cfg.Port != 8080 {
+		t.Errorf("Port = %d, want default 8080", cfg.Port)
+	}
+	if cfg.CooldownSec != 60 {
+		t.Errorf("CooldownSec = %d, want default 60", cfg.CooldownSec)
+	}
+	if cfg.MaxRetries != 3 {
+		t.Errorf("MaxRetries = %d, want default 3", cfg.MaxRetries)
+	}
+}

@@ -4,7 +4,7 @@
 
 ---
 
-✅ **已完成 26 项核心功能，204 测试通过（详见 git log）。**
+✅ **已完成 26 项核心功能，275 测试通过（详见 git log）。**
 
 ---
 
@@ -83,11 +83,11 @@
 
 ## 附：测试覆盖 & 验证摘要
 
-### 测试覆盖（204 tests）
+### 测试覆盖（275 tests）
 
 | 文件 | 测试数 | 类型 |
 |------|--------|------|
-| `internal/config/config_test.go` | 40 | 单元测试 |
+| `internal/config/config_test.go` | 44 | 单元测试 |
 | `internal/keypool/keypool_test.go` | 12 | 单元测试 |
 | `internal/keypool/store_test.go` | 14 | 单元测试 |
 | `internal/keypool/crypto_test.go` | 9 | 单元测试 |
@@ -96,6 +96,7 @@
 | `internal/circuitbreaker/upstream_test.go` | 9 | 单元测试 |
 | `internal/server/logging_test.go` | 15 | 单元测试 |
 | `internal/server/error_classification_test.go` | 6 | 单元测试 |
+| `internal/server/manager_test.go` | 4 | **集成验收测试** |
 | `handlers_test.go` | 20 | Handler 测试 |
 | `logstore_test.go` | 4 | Handler 测试 |
 | `proxy_test.go` | 34 | **集成验收测试** |
@@ -105,7 +106,13 @@
 | `healthcheck_test.go` | 5 | **集成验收测试** |
 | `docker_compose_test.go` | 5 | **集成验收测试** |
 | `config_cmd_test.go` | 3 | **集成验收测试** |
-| **总计** | **204** | |
+| **总计** | **275** | |
+
+> ✅ Spec B (InstanceManager) 已完成: `alvus start` 现支持单进程多实例运行，替代 manage.go 子进程模式。
+> - `LoadAllTomlProviders` — 从 config.toml 读取多个 provider
+> - `InstanceManager` — 管理多实例生命周期（启动/优雅关闭/后台任务）
+> - 向后兼容: `.env` 单 provider 模式不变
+> - `--manage manage.json` 模式保留（过渡期）
 
 ### 压测基线（参考）
 | 场景 | 结果 |

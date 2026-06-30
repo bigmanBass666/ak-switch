@@ -614,6 +614,38 @@ func DetectConfigSource(specifiedPath string) (source string, fromToml bool, err
 	return ".env", false, nil
 }
 
+// LoadAllTomlProviders 读取 TOML 配置文件中的所有 [provider.*] 段，
+// 每个段转换为独立的 *Config 实例，返回 provider 名到 Config 的映射。
+// 文件必须存在且格式合法；格式错误或缺少 [provider] 段返回 error。
+func LoadAllTomlProviders(path string) (map[string]*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, &ConfigError{
+			Category: "system",
+			Message:  fmt.Sprintf("系统错误: 读取 TOML 配置文件 %q 失败: %v", path, err),
+		}
+	}
+	var tc TomlConfig
+	if err := toml.Unmarshal(data, &tc); err != nil {
+		return nil, &ConfigError{
+			Category: "config",
+			Message:  fmt.Sprintf("配置错误: TOML 解析失败: %v", err),
+		}
+	}
+	if len(tc.Provider) == 0 {
+		return nil, &ConfigError{
+			Category: "config",
+			Message:  "配置错误: TOML 配置缺少 [provider] 段",
+		}
+	}
+	result := make(map[string]*Config, len(tc.Provider))
+	for name, p := range tc.Provider {
+		cfg := tomlToConfig(name, &p)
+		result[name] = cfg
+	}
+	return result, nil
+}
+
 // tomlToConfig 将单 provider 的 TOML 配置转换为 *Config，未指定的字段使用默认值。
 func tomlToConfig(name string, tc *TomlProviderConfig) *Config {
 	cfg := DefaultConfig()
