@@ -25,15 +25,15 @@ func newTestServer(keys []string) *httptest.Server {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool(keys, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	return httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	return httptest.NewServer(pr.Handler())
 }
 
 // ── Health ─────────────────────────────────────────
 
 func TestHealthHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	resp, err := http.Get(alvus.URL + "/health")
@@ -55,20 +55,27 @@ func TestHealthHandler(t *testing.T) {
 		t.Errorf(`expected status="ok", got %v`, body["status"])
 	}
 
-	if n, ok := body["keys"].(float64); !ok || int(n) != 3 {
-		t.Errorf("expected keys=3, got %v", body["keys"])
+	if n, ok := body["providers"].(float64); !ok || int(n) != 1 {
+		t.Errorf("expected providers=1, got %v", body["providers"])
 	}
 
-	if _, ok := body["details"]; !ok {
-		t.Error("expected details field in response")
+	details, ok := body["details"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected details field with per-provider data")
+	}
+	testProv, ok := details["test"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected test provider in details")
+	}
+	if n, ok := testProv["keys"].(float64); !ok || int(n) != 3 {
+		t.Errorf("expected keys=3 for test provider, got %v", testProv["keys"])
 	}
 }
 
 // ── Config GET ─────────────────────────────────────
 
 func TestConfigGet(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	resp, err := http.Get(alvus.URL + "/api/config")
@@ -123,8 +130,7 @@ func TestConfigGet(t *testing.T) {
 // ── Config POST ────────────────────────────────────
 
 func TestConfigPost(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	// ConfigPost 会写 .env 并调用 reloadConfig，需要隔离到临时目录
+		// ConfigPost 会写 .env 并调用 reloadConfig，需要隔离到临时目录
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -151,10 +157,12 @@ func TestConfigPost(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
+	// POST /api/config is no longer supported in ProviderRouter architecture
 	reqBody := `{"targetBase":"https://new.example.com/v1","genaiBase":"https://genai.example.com","keys":["new-key-1","new-key-2"]}`
 	resp, err := http.Post(alvus.URL+"/api/config", "application/json", strings.NewReader(reqBody))
 	if err != nil {
@@ -162,25 +170,15 @@ func TestConfigPost(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status 200, got %d", resp.StatusCode)
-	}
-
-	var body map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-
-	if body["status"] != "reloaded" {
-		t.Errorf(`expected status="reloaded", got %v`, body["status"])
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected status 405 (POST removed), got %d", resp.StatusCode)
 	}
 }
 
 // ── Keys GET ───────────────────────────────────────
 
 func TestKeysGet(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	resp, err := http.Get(alvus.URL + "/api/keys")
@@ -222,8 +220,7 @@ func TestKeysGet(t *testing.T) {
 // ── Keys POST ──────────────────────────────────────
 
 func TestKeysPost(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	// POST 添加新 key
@@ -273,8 +270,7 @@ func TestKeysPost(t *testing.T) {
 // ── Keys DELETE ────────────────────────────────────
 
 func TestKeysDelete(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	// 先 GET 确认当前 key 数
@@ -334,8 +330,7 @@ func TestKeysDelete(t *testing.T) {
 // ── Clear ──────────────────────────────────────────
 
 func TestClearHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	resp, err := http.Post(alvus.URL+"/clear", "application/json", strings.NewReader(`{}`))
@@ -361,8 +356,7 @@ func TestClearHandler(t *testing.T) {
 // ── Health with AdminToken auth ──────────────────────
 
 func TestHealthHandlerAuth(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	cfg := &config.Config{
+		cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -371,8 +365,9 @@ func TestHealthHandlerAuth(t *testing.T) {
 		AdminToken:  "my-token",
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -421,8 +416,7 @@ func TestHealthHandlerAuth(t *testing.T) {
 // ── Clear with AdminToken auth ───────────────────────
 
 func TestClearHandlerAuth(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	cfg := &config.Config{
+		cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -431,8 +425,9 @@ func TestClearHandlerAuth(t *testing.T) {
 		AdminToken:  "my-token",
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -483,8 +478,7 @@ func TestClearHandlerAuth(t *testing.T) {
 // ── Stats GET ───────────────────────────────────────
 
 func TestStatsHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	resp, err := http.Get(alvus.URL + "/api/stats")
@@ -513,8 +507,7 @@ func TestStatsHandler(t *testing.T) {
 // ── Disable Key POST ──────────────────────────────────
 
 func TestDisableKeyHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	// 禁用 index=1
@@ -569,8 +562,7 @@ func TestDisableKeyHandler(t *testing.T) {
 }
 
 func TestDisableKeyHandlerAuth(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	cfg := &config.Config{
+		cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -580,8 +572,9 @@ func TestDisableKeyHandlerAuth(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -631,8 +624,7 @@ func TestDisableKeyHandlerAuth(t *testing.T) {
 // ── Cooldown Key PUT ──────────────────────────────────
 
 func TestCooldownKeyHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	// 冷却 index=1
@@ -670,8 +662,7 @@ func TestCooldownKeyHandler(t *testing.T) {
 // ── Delete Key by Index ───────────────────────────────
 
 func TestDeleteKeyByIndexHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	// 删除 index=1
@@ -722,8 +713,7 @@ func TestDeleteKeyByIndexHandler(t *testing.T) {
 }
 
 func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	cfg := &config.Config{
+		cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -733,8 +723,9 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -772,8 +763,7 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 // ── Reload POST ──────────────────────────────────────
 
 func TestReloadHandler(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	origDir, err := os.Getwd()
+		origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,8 +788,9 @@ func TestReloadHandler(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	resp, err := http.Post(alvus.URL+"/api/reload", "application/json", strings.NewReader(`{}`))
@@ -824,8 +815,7 @@ func TestReloadHandler(t *testing.T) {
 // ── Log Level API ─────────────────────────────────────
 
 func TestLogLevelHandler_Success(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a"})
+		alvus := newTestServer([]string{"key-a"})
 	defer alvus.Close()
 
 	resp, err := http.Post(alvus.URL+"/api/log-level", "application/json", strings.NewReader(`{"level":"debug"}`))
@@ -849,8 +839,7 @@ func TestLogLevelHandler_Success(t *testing.T) {
 }
 
 func TestLogLevelHandler_InvalidLevel(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a"})
+		alvus := newTestServer([]string{"key-a"})
 	defer alvus.Close()
 
 	resp, err := http.Post(alvus.URL+"/api/log-level", "application/json", strings.NewReader(`{"level":"verbose"}`))
@@ -865,8 +854,7 @@ func TestLogLevelHandler_InvalidLevel(t *testing.T) {
 }
 
 func TestLogLevelHandler_WrongMethod(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a"})
+		alvus := newTestServer([]string{"key-a"})
 	defer alvus.Close()
 
 	resp, err := http.Get(alvus.URL + "/api/log-level")
@@ -881,8 +869,7 @@ func TestLogLevelHandler_WrongMethod(t *testing.T) {
 }
 
 func TestLogLevelHandler_Unauthorized(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	cfg := &config.Config{
+		cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -892,8 +879,9 @@ func TestLogLevelHandler_Unauthorized(t *testing.T) {
 		Keys:        []string{"key-a"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	// No token → 401
@@ -911,8 +899,7 @@ func TestLogLevelHandler_Unauthorized(t *testing.T) {
 // ── Keys DELETE — 1-based index validation ─────────────
 
 func TestKeysHandlerDelete_OneBased(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	// GET initial count
@@ -961,8 +948,7 @@ func TestKeysHandlerDelete_OneBased(t *testing.T) {
 }
 
 func TestKeysHandlerDelete_IndexZeroReturns400(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	reqBody := `{"index":0}`
@@ -983,8 +969,7 @@ func TestKeysHandlerDelete_IndexZeroReturns400(t *testing.T) {
 }
 
 func TestKeysHandlerDelete_IndexNegativeReturns400(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	reqBody := `{"index":-1}`
@@ -1005,8 +990,7 @@ func TestKeysHandlerDelete_IndexNegativeReturns400(t *testing.T) {
 }
 
 func TestKeysHandlerDelete_IndexTooLargeReturns400(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
+		alvus := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer alvus.Close()
 
 	reqBody := `{"index":999}`
@@ -1029,8 +1013,7 @@ func TestKeysHandlerDelete_IndexTooLargeReturns400(t *testing.T) {
 // ── DELETE /api/keys — unauthenticated ──────────────────
 
 func TestKeysHandlerDelete_Unauthenticated(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	cfg := &config.Config{
+		cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -1040,8 +1023,9 @@ func TestKeysHandlerDelete_Unauthenticated(t *testing.T) {
 		Keys:        []string{"key-a", "key-b", "key-c"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b", "key-c"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
 	// Without token → 401
@@ -1074,8 +1058,7 @@ func TestKeysHandlerDelete_Unauthenticated(t *testing.T) {
 // ── Config POST — unauthenticated ──────────────────────
 
 func TestConfigHandlerPost_Unauthenticated(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
-	origDir, err := os.Getwd()
+		origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1101,22 +1084,23 @@ func TestConfigHandlerPost_Unauthenticated(t *testing.T) {
 		Keys:        []string{"key-a", "key-b"},
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
 
-	// Without token → 401
+	// POST /api/config is no longer supported — both no token and with token return 405
 	reqBody := `{"targetBase":"http://example.com","genaiBase":"http://genai.example.com","keys":["new-key"]}`
 	resp, err := http.Post(alvus.URL+"/api/config", "application/json", strings.NewReader(reqBody))
 	if err != nil {
 		t.Fatalf("POST /api/config (no auth): %v", err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("expected 401 without token, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST (method not allowed), got %d", resp.StatusCode)
 	}
 
-	// With correct token → 200
+	// With correct token — still 405
 	req, _ := http.NewRequest("POST", alvus.URL+"/api/config", strings.NewReader(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Admin-Token", "my-token")
@@ -1125,7 +1109,7 @@ func TestConfigHandlerPost_Unauthenticated(t *testing.T) {
 		t.Fatalf("POST /api/config (correct token): %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 with correct token, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 with token, got %d", resp.StatusCode)
 	}
 }

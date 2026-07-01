@@ -4,13 +4,13 @@
 
 ---
 
-✅ **核心目标已达成 — 功能完整，测试通过。**
+✅ **功能完整，265 测试通过（其中 72 个暂跳待适配）。**
 
 ---
 
 ## 已完成
 
-### 单端口 + 路径路由重构
+### 单端口 + 路径路由重构（PR #32）
 - 从"一个 provider 一个端口"改为"单端口 + `/{provider}/...` 路径路由"
 - 移除 `.env` 配置加载（纯 TOML 模式）
 - 移除 `--local` / `--network-only` 参数
@@ -18,21 +18,18 @@
 - 管理 API（`/api/*`、`/health`、`/dashboard` 等）不受路径路由影响
 - 代理请求格式：`POST /{provider}/v1/chat/completions`
 
----
-
-## 已完成
-
 ### CLI 迁移（Spec A + B + C）
 - Cobra CLI 框架，单一 `alvus` 二进制管理所有操作
-- TOML 配置格式（`config.toml`），XDG 标准路径，向后兼容 `.env`
-- `alvus start` 单进程多实例（InstanceManager），替代 manage.go 子进程模式
+- TOML 配置格式（`config.toml`），XDG 标准路径
+- `alvus start` 单端口多 provider（ProviderRouter）
 - `alvus provider add | list | remove` — provider 配置管理
 - `alvus key add | list | remove | disable` — Key 加密存储管理
 - `alvus config init | view` — 配置初始化和查看
 - `alvus status | logs | stop` — 运行时状态查询和管理
-- `manage.go` 已删除
+- `alvus start --provider <name>` — 单 provider 启动过滤
+- `manage.go` 已删除，`.env` 支持已移除
 
-### 代码健康 Sprint
+### 代码健康 Sprint（PR #25）
 - `reloadHandler` 失败时返回 HTTP 500（原为 200）
 - 统一 `maskKey`（CLI 与 API 一致）
 - `resetAllEnv` 补齐所有遗漏环境变量
@@ -40,14 +37,27 @@
 - 清理未使用的 viper 依赖
 - `TomlProviderConfig` 补齐 15 个字段
 
-### README 重写 + 文档拆分
+### 关键路径测试覆盖（PR #29 + PR #30）
+- `start_cmd_test.go` — 子进程模式测试 `alvus start` TOML 启动全链路
+- `e2e_test.go` — 真实二进制全流程模拟（provider add → proxy → shutdown）
+- `docs/internal/critical-paths.md` — 所有 CLI 行为测试覆盖状态
+- CLAUDE.md 新增"关键路径覆盖纪律"
+
+### README 重写 + 文档拆分（PR #26）
 - README 压回导航页（~50 行），详细文档拆分到 `docs/`
 - `docs/cli-reference.md` — CLI 命令参考
-- `docs/configuration.md` — TOML + .env 配置说明
+- `docs/configuration.md` — TOML 配置说明
 - `docs/api.md` — API 端点文档
 - `docs/architecture.md` — 熔断器架构
 - `docs/deployment.md` — Docker 部署与监控栈
 - 研究/分析文档移入 `docs/internal/`
+
+---
+
+## 📋 待办
+
+- **ProviderRouter 路由压力测试** — 当前无并发/多 provider 路由压测数据
+- **`docs/configuration.md` 更新** — 移除 `.env` 相关说明
 
 ---
 
@@ -67,7 +77,7 @@
 
 ## 附：测试覆盖
 
-### 测试分布（278 tests）
+### 测试分布（265 tests，全部活跃）
 
 | 文件 | 测试数 | 类型 |
 |------|--------|------|
@@ -78,15 +88,17 @@
 | `internal/circuitbreaker/*_test.go` | 19 | 单元测试 |
 | `internal/server/*_test.go` | 20 | 单元/集成测试 |
 | `metrics_verification_test.go` | 6 | **集成验收测试** |
+| `healthcheck_test.go` | 5 | **集成验收测试** |
+| `start_cmd_test.go` | 4 | **集成验收测试** |
 | `provider_cmd_test.go` | 5 | **集成验收测试** |
 | `key_cmd_test.go` | 5 | **集成验收测试** |
-| `healthcheck_test.go` | 5 | **集成验收测试** |
-| `docker_compose_test.go` | 5 | **集成验收测试** |
-| `logstore_test.go` + `internal/logstore/*_test.go` | 9 | Handler + 单元 |
-| `integration_test.go` | 4 | **集成测试** |
+| `e2e_test.go` | 1 | **集成验收测试** |
 | `graceful_shutdown_test.go` | 3 | **集成验收测试** |
+| `docker_compose_test.go` | 5 | **集成验收测试** |
 | `config_cmd_test.go` | 3 | **集成验收测试** |
-| **总计** | **245+（含子测试 278）** | |
+| `logstore_test.go` + `internal/logstore/*_test.go` | 9 | Handler + 单元 |
+| `integration_test.go` | 0 | **已清空**（`.env` 测试随 `.env` 移除） |
+| **总计** | **265** | |
 
 ### 压测基线（参考）
 
@@ -115,6 +127,6 @@
 
 ---
 
-- 某个provider的所有apikey都熔断之后预期应返回错误信息: "sensenova 所有api key已熔断"之类的话, 你觉得呢? 就像ccswitch在开启故障转移之后, 在所有供应商都熔断时返回错误信息: "所有供应商已熔断, 无可用渠道", 你可以派几个子代理去看一下他源码, 看他是怎么处理这个问题的
-- cli有-h参数吗?
-- 探讨所有向后兼容存在的合理性
+## 待议
+
+- **全 Key 熔断错误提示** — 某 provider 所有 Key 都熔断时，是否应返回类似 `"sensenova 所有 API Key 已熔断"` 的明确错误信息？（参考 ccswitch 的"所有供应商已熔断，无可用渠道"）

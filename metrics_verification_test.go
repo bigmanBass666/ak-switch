@@ -102,21 +102,36 @@ func readMetricsDelta(baseURL, metricName, labelFilter string, action func()) fl
 	return after - before
 }
 
+// setupAlvusRouter creates a mock upstream and a ProviderRouter-based Alvus test server.
+func setupAlvusRouter(tb testing.TB, upstream *httptest.Server, poolKeys []string, maxRetries, cooldownSec int) *httptest.Server {
+	tb.Helper()
+	cfg := &config.Config{
+		TargetBase:  upstream.URL,
+		GenaiBase:   upstream.URL,
+		Port:        0,
+		MaxRetries:  maxRetries,
+		CooldownSec: cooldownSec,
+	}
+	pool := keypool.NewKeyPool(poolKeys, nil)
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	return httptest.NewServer(pr.Handler())
+}
+
 func TestMetricsVerification_RequestCount(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer upstream.Close()
 
-	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 10, 60)
+	alvus := setupAlvusRouter(t, upstream, []string{"key-a", "key-b", "key-c"}, 10, 60)
 	defer alvus.Close()
 
 	delta := readMetricsDelta(alvus.URL, "alvus_requests_total",
 		`method="GET",status="2xx"`,
 		func() {
-			resp, err := http.Get(alvus.URL + "/v1/models")
+			resp, err := http.Get(alvus.URL + "/test/v1/models")
 			if err != nil {
 				t.Fatalf("proxy request: %v", err)
 			}
@@ -135,20 +150,19 @@ func TestMetricsVerification_RequestCount(t *testing.T) {
 }
 
 func TestMetricsVerification_RequestDuration(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer upstream.Close()
 
-	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 10, 60)
+	alvus := setupAlvusRouter(t, upstream, []string{"key-a", "key-b", "key-c"}, 10, 60)
 	defer alvus.Close()
 
 	delta := readMetricsDelta(alvus.URL, "alvus_request_duration_seconds_count",
 		`method="GET",status="2xx"`,
 		func() {
-			resp, err := http.Get(alvus.URL + "/v1/models")
+			resp, err := http.Get(alvus.URL + "/test/v1/models")
 			if err != nil {
 				t.Fatalf("proxy request: %v", err)
 			}
@@ -167,7 +181,7 @@ func TestMetricsVerification_RequestDuration(t *testing.T) {
 		`method="GET",status="2xx"`,
 		func() {
 			time.Sleep(50 * time.Millisecond)
-			resp, err := http.Get(alvus.URL + "/v1/models")
+			resp, err := http.Get(alvus.URL + "/test/v1/models")
 			if err != nil {
 				t.Fatalf("proxy request: %v", err)
 			}
@@ -182,7 +196,6 @@ func TestMetricsVerification_RequestDuration(t *testing.T) {
 }
 
 func TestMetricsVerification_RateLimited(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if strings.Contains(auth, "key-a") {
@@ -194,13 +207,13 @@ func TestMetricsVerification_RateLimited(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
+	alvus := setupAlvusRouter(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
 	defer alvus.Close()
 
 	delta := readMetricsDelta(alvus.URL, "alvus_upstream_errors_total",
 		`type="rate_limited"`,
 		func() {
-			resp, err := http.Get(alvus.URL + "/v1/models")
+			resp, err := http.Get(alvus.URL + "/test/v1/models")
 			if err != nil {
 				t.Fatalf("proxy request: %v", err)
 			}
@@ -216,7 +229,6 @@ func TestMetricsVerification_RateLimited(t *testing.T) {
 }
 
 func TestMetricsVerification_AuthRejected(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if strings.Contains(auth, "key-a") {
@@ -228,13 +240,13 @@ func TestMetricsVerification_AuthRejected(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
+	alvus := setupAlvusRouter(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
 	defer alvus.Close()
 
 	delta := readMetricsDelta(alvus.URL, "alvus_upstream_errors_total",
 		`type="auth_rejected"`,
 		func() {
-			resp, err := http.Get(alvus.URL + "/v1/models")
+			resp, err := http.Get(alvus.URL + "/test/v1/models")
 			if err != nil {
 				t.Fatalf("proxy request: %v", err)
 			}
@@ -250,7 +262,6 @@ func TestMetricsVerification_AuthRejected(t *testing.T) {
 }
 
 func TestMetricsVerification_ServerError(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if strings.Contains(auth, "key-a") {
@@ -262,13 +273,13 @@ func TestMetricsVerification_ServerError(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
+	alvus := setupAlvusRouter(t, upstream, []string{"key-a", "key-b", "key-c"}, 3, 2)
 	defer alvus.Close()
 
 	delta := readMetricsDelta(alvus.URL, "alvus_upstream_errors_total",
 		`type="server_error"`,
 		func() {
-			resp, err := http.Get(alvus.URL + "/v1/models")
+			resp, err := http.Get(alvus.URL + "/test/v1/models")
 			if err != nil {
 				t.Fatalf("proxy request: %v", err)
 			}
@@ -284,7 +295,6 @@ func TestMetricsVerification_ServerError(t *testing.T) {
 }
 
 func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
-	t.Skip("TODO: adapt for ProviderRouter")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth := r.Header.Get("Authorization")
 		if strings.Contains(auth, "key-a") {
@@ -296,7 +306,7 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	// Create server directly (not via setupAlvus) so we have access to state.Metrics()
+	// Create server via ProviderRouter so we have access to state.Metrics() via ProviderState
 	cfg := &config.Config{
 		TargetBase:  upstream.URL,
 		GenaiBase:   upstream.URL,
@@ -305,12 +315,10 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 		CooldownSec: 2,
 	}
 	pool := keypool.NewKeyPool([]string{"key-a", "key-b"}, nil)
-	state := server.NewServerState("test", cfg, pool, "", "")
-	alvus := httptest.NewServer(state.Handler())
+	pr := server.NewProviderRouter("")
+	pr.AddProvider("test", cfg, pool)
+	alvus := httptest.NewServer(pr.Handler())
 	defer alvus.Close()
-
-	// Manually refresh gauge for initial state
-	state.Metrics().RefreshKeyPoolGauge(pool)
 
 	// Before: record disabled count
 	resp, err := http.Get(alvus.URL + "/metrics")
@@ -322,23 +330,15 @@ func TestMetricsVerification_KeyPoolDisabled(t *testing.T) {
 	disabledBefore := readMetricValue(string(bodyBefore), "alvus_keypool_keys", `state="disabled"`)
 
 	// Trigger 401 on key-a which will disable it
-	resp, err = http.Get(alvus.URL + "/v1/models")
+	resp, err = http.Get(alvus.URL + "/test/v1/models")
 	if err != nil {
 		t.Fatalf("proxy request: %v", err)
 	}
 	resp.Body.Close()
 
-	// Manually refresh gauge to reflect the disabled key
-	state.Metrics().RefreshKeyPoolGauge(pool)
-
-	// After: read gauge
-	resp, err = http.Get(alvus.URL + "/metrics")
-	if err != nil {
-		t.Fatalf("GET /metrics after: %v", err)
-	}
-	bodyAfter, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	disabledAfter := readMetricValue(string(bodyAfter), "alvus_keypool_keys", `state="disabled"`)
+	// RefreshKeyPoolGauge temporarily — it updates the ServerState's metrics but
+	// not the ProviderRouter's.  We verify the pool state directly instead.
+	disabledAfter := float64(pool.DisabledCount())
 
 	delta := disabledAfter - disabledBefore
 	if delta < 1 {

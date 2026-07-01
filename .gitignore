@@ -20,6 +20,9 @@ logs/
 # Build output
 alvus_proxy.exe
 
+# Runtime PID file
+/alvus.pid
+
 # Load test results (binary reports, keep .gitkeep)
 test/load/results/*.bin
 test/load/results/*.html
