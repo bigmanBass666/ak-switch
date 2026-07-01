@@ -763,19 +763,26 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 // ── Reload POST ──────────────────────────────────────
 
 func TestReloadHandler(t *testing.T) {
-		origDir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
 	tmpDir := t.TempDir()
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Chdir(origDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	envContent := "PORT=19999\nTARGET_BASE_URL=http://localhost:19999\nGENAI_BASE_URL=http://localhost:19999\nAPI_KEYS=key-a,key-b\nCOOLDOWN_SEC=60\nMAX_RETRIES=3\n"
-	if err := os.WriteFile(filepath.Join(tmpDir, ".env"), []byte(envContent), 0600); err != nil {
-		t.Fatal(err)
+	// Write a valid config.toml at the XDG path for reload to read
+	xdgPath, err := config.XDGConfigPath()
+	if err != nil {
+		t.Fatalf("XDGConfigPath failed: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(xdgPath), 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	tomlContent := `[provider.test]
+target = "http://localhost:19999/v1"
+genai = "http://localhost:19999"
+port = 19999
+max_retries = 3
+cooldown_sec = 60
+`
+	if err := os.WriteFile(xdgPath, []byte(tomlContent), 0600); err != nil {
+		t.Fatalf("write config failed: %v", err)
 	}
 
 	cfg := &config.Config{

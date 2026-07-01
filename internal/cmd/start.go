@@ -53,17 +53,17 @@ func startServer(dashboardHTML string, providerFilter string) {
 	// ── Create ProviderRouter ─────────────────────────
 	router := server.NewProviderRouter(dashboardHTML)
 
-	// Use the first provider's port as the shared server port
 	for name, cfg := range providers {
-			// Set the shared server port from first provider's config
-			if port == 0 && cfg.Port > 0 {
-				port = cfg.Port
-			}
-		// Apply provider filter if set
+		// Apply provider filter first -- port from first matched provider
 		if providerFilter != "" && name != providerFilter {
 			slog.Debug("skipping provider (filtered by --provider)", "name", name)
 			continue
 		}
+
+		if port == 0 && cfg.Port > 0 {
+			port = cfg.Port
+		}
+		// Load API keys from encrypted store or env
 
 		server.ApplyLogLevel(cfg.LogLevel)
 
