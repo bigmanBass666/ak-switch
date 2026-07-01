@@ -574,14 +574,14 @@ func LoadToml(path string) (*Config, error) {
 			Message:  "配置错误: TOML 配置缺少 [provider] 段",
 		}
 	}
-	// 取第一个 provider 作为主配置
-	for name, p := range tc.Provider {
-		return tomlToConfig(name, &p), nil
+	// 取第一个 provider 作为主配置（按名称排序确保确定性）
+	names := make([]string, 0, len(tc.Provider))
+	for n := range tc.Provider {
+		names = append(names, n)
 	}
-	return nil, &ConfigError{
-		Category: "config",
-		Message:  "配置错误: TOML 配置缺少 [provider] 段",
-	}
+	sort.Strings(names)
+	p := tc.Provider[names[0]]
+	return tomlToConfig(names[0], &p), nil
 }
 
 // SaveToml 将 Config 写入 TOML 文件。覆盖已存在的文件。
