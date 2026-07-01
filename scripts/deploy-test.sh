@@ -3,7 +3,7 @@
 # Runs from WSL2 where Docker is available.
 #
 # Usage:
-#   bash deploy-test.sh
+#   bash scripts/deploy-test.sh
 #
 # Prerequisites:
 #   - Docker & docker compose installed

@@ -8,6 +8,6 @@ logs/
 manage-work/
 *.exe
 *.test
-regression_test.ps1
-lint.ps1
-benchmark_test.go
+scripts/
+*.exe
+*.test
