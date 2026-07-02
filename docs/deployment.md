@@ -15,7 +15,7 @@ curl http://localhost:3000/health
 docker compose logs -f
 ```
 
-需要在容器内挂载 `config.toml` 或 `.env` 配置文件。
+需要在容器内挂载 `config.toml` 配置文件。
 
 ### 自定义端口
 

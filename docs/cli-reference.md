@@ -6,28 +6,25 @@
 
 | 标志 | 说明 |
 |------|------|
-| `--local` | 绑定到 `127.0.0.1`（仅本地访问） |
-| `--network-only` | 绑定到 `0.0.0.0`（局域网可访问） |
+| `--provider` | 只启动指定 provider |
 | `--tag` | 进程标识标签 |
 | `--help` | 显示帮助信息 |
 
-`--local` 和 `--network-only` 互斥，优先级 `--local` > `--network-only` > 默认（`0.0.0.0`）。
-
 ## `alvus start`
 
-加载配置（自动检测 `config.toml` 或 `.env`），初始化 Key 池，启动 HTTP 代理服务。
+读取 `config.toml`，初始化 Key 池，启动 HTTP 代理服务。
 
 ```bash
-alvus start [--local] [--network-only]
+alvus start [--provider <name>]
 ```
 
-- **TOML 模式**：读取 `config.toml` 中所有 `[provider.*]` 段，每段启动一个独立实例
-- **`.env` 模式**：向后兼容，单 provider 单实例
+- 读取 `config.toml` 中所有 `[provider.*]` 段，每段启动一个独立实例
+- `--provider <name>` 只启动指定 provider
 - 自动写入 `alvus.pid` 文件，`alvus stop` 通过此文件发送中断信号
 
 ### 启动顺序
 
-1. 检测配置源（`config.toml` > `.env`）
+1. 读取 `config.toml`
 2. 逐个加载 provider 配置和 Key
 3. 绑定端口启动 HTTP 服务
 4. 启动后台 goroutine（热重载、指标刷新、主动健康检查）
@@ -48,8 +45,6 @@ alvus config view                # 打印当前配置
 | Linux | `~/.config/alvus/config.toml` |
 | macOS | `~/Library/Application Support/alvus/config.toml` |
 
-检测到 `.env` 存在时打印迁移提示。
-
 ## `alvus provider`
 
 ```bash
@@ -63,7 +58,7 @@ alvus provider remove <name>                            # 删除 provider
 | 标志 | 缩写 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | `--target` | `-t` | 是 | — | 上游 API 基础 URL |
-| `--port` | `-p` | 是 | — | HTTP 监听端口 |
+| `--port` | `-p` | 首个 provider 必填 | — | HTTP 监听端口（后续 provider 复用） |
 | `--genai` | `-g` | 否 | — | GenAI 基础 URL（`/genai/` 路径路由） |
 | `--cooldown-sec` | `-c` | 否 | `60` | 429 后 Key 冷却时长（秒） |
 | `--max-retries` | `-r` | 否 | `3` | 每次请求的最大重试次数 |
@@ -74,10 +69,9 @@ alvus provider remove <name>                            # 删除 provider
 # 最小配置
 alvus provider add nvidia --target https://integrate.api.nvidia.com/v1 --port 3001
 
-# 完整配置
+# 完整配置（port 复用第一个 provider 的）
 alvus provider add sensenova \
   --target https://api.sensenova.com/v1 \
-  --port 3002 -g https://api.sensenova.com \
   --cooldown-sec 30 --max-retries 5
 ```
 

@@ -28,7 +28,7 @@
 | `PUT` | `/api/keys/{index}/cooldown` | 是 | 冷却指定 Key |
 | `DELETE` | `/api/keys/{index}` | 是 | 按索引删除 Key |
 | `GET` | `/api/stats` | 否 | 请求统计（成功率、Key 状态、运行时长） |
-| `POST` | `/api/reload` | 是 | 从 `.env` 重新加载配置 |
+| `POST` | `/api/reload` | 是 | 从 `config.toml` 重新加载配置 |
 | `GET` | `/logs` | 否 | 获取请求日志（最近 1000 条） |
 | `POST` | `/clear` | 是 | 清空日志 |
 | `GET` | `/metrics` | 否 | Prometheus 指标 |
