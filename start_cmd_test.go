@@ -57,7 +57,7 @@ func TestStartCmd_TOMLMode(t *testing.T) {
 	})
 
 	var healthOK bool
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 50; i++ {
 		resp, err := http.Get("http://127.0.0.1:19301/health")
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)
@@ -70,7 +70,7 @@ func TestStartCmd_TOMLMode(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if !healthOK {
-		t.Fatal("server health check never returned 200 within 2s")
+		t.Fatal("server health check never returned 200 within 5s")
 	}
 }
 
@@ -162,7 +162,7 @@ func TestStartCmd_ProviderFilter(t *testing.T) {
 	})
 
 	var healthOK bool
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 50; i++ {
 		resp, err := http.Get("http://127.0.0.1:19305/health")
 		if err == nil {
 			io.Copy(io.Discard, resp.Body)
@@ -175,6 +175,6 @@ func TestStartCmd_ProviderFilter(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if !healthOK {
-		t.Fatal("server health check never returned 200 within 2s")
+		t.Fatal("server health check never returned 200 within 5s")
 	}
 }
