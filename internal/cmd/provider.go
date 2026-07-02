@@ -18,7 +18,7 @@ func init() {
 	providerCmd.AddCommand(providerRemoveCmd)
 
 	providerAddCmd.Flags().StringP("target", "t", "", "Upstream target URL (required)")
-	providerAddCmd.Flags().IntP("port", "p", 0, "HTTP listen port (required)")
+	providerAddCmd.Flags().IntP("port", "p", 0, "HTTP listen port (required for first provider)")
 	providerAddCmd.Flags().StringP("genai", "g", "", "GenAI base URL (optional)")
 	providerAddCmd.Flags().IntP("cooldown-sec", "c", 60, "Cooldown seconds after rate-limit")
 	providerAddCmd.Flags().IntP("max-retries", "r", 3, "Max retry attempts for upstream")
@@ -35,12 +35,12 @@ var providerAddCmd = &cobra.Command{
 	Short: "Add a new provider",
 	Long: `Add a new provider to the TOML configuration.
 
-The --target and --port flags are required. If no config.toml exists yet,
-it will be created at the XDG config directory.
+The --target flag is required. --port is required for the first provider;
+subsequent providers reuse the existing port and --port can be omitted.
 
 Example:
   alvus provider add nvidia --target https://integrate.api.nvidia.com/v1 --port 3002
-  alvus provider add sensenova --target https://api.sensenova.com/v1 --port 3001 -g https://api.sensenova.com`,
+  alvus provider add sensenova --target https://api.sensenova.com/v1`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
@@ -53,9 +53,6 @@ Example:
 
 		if target == "" {
 			return fmt.Errorf("--target/-t is required")
-		}
-		if port == 0 {
-			return fmt.Errorf("--port/-p is required")
 		}
 
 		source, err := config.XDGConfigPath()
@@ -79,11 +76,23 @@ Example:
 			return fmt.Errorf("provider %q already exists in %s", name, source)
 		}
 
+		// Port: first provider must set it; subsequent providers reuse the existing one
+		if port == 0 {
+			if tc.Port == 0 {
+				return fmt.Errorf("--port/-p is required for the first provider")
+			}
+			port = tc.Port // reuse existing port
+		} else if tc.Port == 0 {
+			// First provider with a port — set it
+			tc.Port = port
+		}
+		// If both port > 0 and tc.Port > 0, user explicitly passed --port;
+		// we don't override tc.Port (first provider's port wins).
+
 		// Add new provider
 		tc.Provider[name] = config.TomlProviderConfig{
 			Target:      target,
 			Genai:       genai,
-			Port:        port,
 			CooldownSec: cooldown,
 			MaxRetries:  maxRetries,
 		}
@@ -144,7 +153,7 @@ Example output:
 		fmt.Printf("  %-12s %-50s %s\n", "NAME", "TARGET", "PORT")
 		for _, n := range names {
 			p := tc.Provider[n]
-			fmt.Printf("  %-12s %-50s %d\n", n, p.Target, p.Port)
+			fmt.Printf("  %-12s %-50s %d\n", n, p.Target, tc.Port)
 		}
 
 		return nil

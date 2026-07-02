@@ -54,6 +54,7 @@ If the file already exists, the command refuses to overwrite it.`,
 
 		// Write example config with placeholder providers
 		tc := &config.TomlConfig{
+			Port: 8080,
 			Provider: map[string]config.TomlProviderConfig{
 				"example-a": {
 					Target:      "https://api.example-a.com/v1",

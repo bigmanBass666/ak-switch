@@ -384,10 +384,11 @@ func TestConfig_EncryptionKey_SanitizedExcluded(t *testing.T) {
 func TestLoadToml_ExistingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "config.toml")
-	content := `[provider.default]
+	content := `port = 9090
+
+[provider.default]
 target = "https://api.example.com"
 genai = "https://ai.example.com"
-port = 9090
 cooldown_sec = 45
 max_retries = 7
 `
@@ -510,10 +511,11 @@ target = "https://api.example.com"
 // ============================================================
 
 func TestTomlProviderConfig_AllFields(t *testing.T) {
-	content := `[provider.default]
+	content := `port = 7070
+
+[provider.default]
 	target = "https://api.example.com"
 	genai = "https://ai.example.com"
-	port = 7070
 	cooldown_sec = 45
 	max_retries = 7
 	disable_thinking = true
@@ -753,15 +755,15 @@ genai = "https://genai.example.com"
 func TestLoadToml_MultiProvider(t *testing.T) {
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "multi.toml")
-	content := `[provider.primary]
+	content := `port = 9090
+
+[provider.primary]
 target = "https://primary.example.com"
 genai = "https://ai.primary.example.com"
-port = 9090
 
 [provider.secondary]
 target = "https://secondary.example.com"
 genai = "https://ai.secondary.example.com"
-port = 8080
 `
 	if err := os.WriteFile(tomlPath, []byte(content), 0644); err != nil {
 		t.Fatal(err)
@@ -797,15 +799,15 @@ func writeTempToml(t *testing.T, content string) string {
 }
 
 func TestLoadAllTomlProviders_MultiProvider(t *testing.T) {
-	content := `[provider.sensenova]
+	content := `port = 9090
+
+[provider.sensenova]
 target = "https://api.sensenova.com"
 genai = "https://ai.sensenova.com"
-port = 9090
 
 [provider.nvidia]
 target = "https://integrate.api.nvidia.com/v1"
 genai = "https://ai.api.nvidia.com"
-port = 8080
 `
 	path := writeTempToml(t, content)
 	providers, err := LoadAllTomlProviders(path)
@@ -834,8 +836,8 @@ port = 8080
 	if nv.TargetBase != "https://integrate.api.nvidia.com/v1" {
 		t.Errorf("nvidia TargetBase = %q, want %q", nv.TargetBase, "https://integrate.api.nvidia.com/v1")
 	}
-	if nv.Port != 8080 {
-		t.Errorf("nvidia Port = %d, want %d", nv.Port, 8080)
+	if nv.Port != 9090 {
+		t.Errorf("nvidia Port = %d, want %d", nv.Port, 9090)
 	}
 }
 

@@ -5,24 +5,29 @@
 ### 示例
 
 ```toml
+port = 3001
+
 [provider.nvidia]
 target = "https://integrate.api.nvidia.com/v1"
-port = 3001
 genai = "https://api.nvidia.com"
 cooldown_sec = 60
 max_retries = 3
 
 [provider.sensenova]
 target = "https://api.sensenova.com/v1"
-port = 3002
 ```
 
-### 字段说明
+### 顶层字段
+
+| 字段 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `port` | 否 | `8080` | HTTP 监听端口（所有 provider 共享） |
+
+### Provider 字段
 
 | 字段 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `target` | 是 | — | 上游 API 基础 URL |
-| `port` | 是 | — | HTTP 监听端口 |
 | `genai` | 否 | `""` | GenAI 模型基础 URL（`/genai/` 路径路由到此地址） |
 | `cooldown_sec` | 否 | `60` | 429 后 Key 冷却的基础时长（秒） |
 | `max_retries` | 否 | `3` | 每次请求的最大重试次数 |

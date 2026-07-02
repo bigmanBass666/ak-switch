@@ -21,13 +21,11 @@ func TestProviderAdd_CreatesProviderEntry(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	// First, init a config file at the XDG path
+	// provider add auto-creates config.toml when it doesn't exist
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
 		t.Fatalf("XDGConfigPath failed: %v", err)
 	}
-	initArgs := []string{"alvus", "config", "init", "-p", xdgPath}
-	runCommand(t, initArgs...)
 
 	// Add a provider
 	addArgs := []string{"alvus", "provider", "add", "test-provider",
@@ -51,8 +49,8 @@ func TestProviderAdd_CreatesProviderEntry(t *testing.T) {
 	if p.Target != "https://test.api.com/v1" {
 		t.Errorf("Target = %q, want %q", p.Target, "https://test.api.com/v1")
 	}
-	if p.Port != 9999 {
-		t.Errorf("Port = %d, want 9999", p.Port)
+	if tc.Port != 9999 {
+		t.Errorf("Port = %d, want 9999", tc.Port)
 	}
 	if p.Genai != "https://test.api.com" {
 		t.Errorf("Genai = %q, want %q", p.Genai, "https://test.api.com")

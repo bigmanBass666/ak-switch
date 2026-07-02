@@ -79,12 +79,6 @@ func DefaultConfig() *Config {
 	}
 }
 
-
-
-
-
-
-
 // Validate checks that all required fields are present and valid.
 // Returns a descriptive error for the first problem found.
 func (c *Config) Validate() error {
@@ -268,7 +262,6 @@ func stringSliceEqual(a, b []string) bool {
 type TomlProviderConfig struct {
 	Target                 string  `toml:"target"`
 	Genai                  string  `toml:"genai,omitempty"`
-	Port                   int     `toml:"port,omitempty"`
 	CooldownSec            int     `toml:"cooldown_sec,omitempty"`
 	MaxRetries             int     `toml:"max_retries,omitempty"`
 	DisableThinking        bool    `toml:"disable_thinking,omitempty"`
@@ -285,6 +278,7 @@ type TomlProviderConfig struct {
 
 // TomlConfig 对应整个 config.toml 文件结构。
 type TomlConfig struct {
+	Port     int                            `toml:"port,omitempty"`
 	Provider map[string]TomlProviderConfig `toml:"provider"`
 }
 
@@ -318,7 +312,11 @@ func LoadToml(path string) (*Config, error) {
 	}
 	sort.Strings(names)
 	p := tc.Provider[names[0]]
-	return tomlToConfig(names[0], &p), nil
+	port := tc.Port
+	if port == 0 {
+		port = DefaultConfig().Port
+	}
+	return tomlToConfig(names[0], &p, port), nil
 }
 
 // SaveToml 将 Config 写入 TOML 文件。覆盖已存在的文件。
@@ -418,20 +416,24 @@ func LoadAllTomlProviders(path string) (map[string]*Config, error) {
 		}
 	}
 	result := make(map[string]*Config, len(tc.Provider))
+	port := tc.Port
+	if port == 0 {
+		port = DefaultConfig().Port
+	}
 	for name, p := range tc.Provider {
-		cfg := tomlToConfig(name, &p)
+		cfg := tomlToConfig(name, &p, port)
 		result[name] = cfg
 	}
 	return result, nil
 }
 
 // tomlToConfig 将单 provider 的 TOML 配置转换为 *Config，未指定的字段使用默认值。
-func tomlToConfig(name string, tc *TomlProviderConfig) *Config {
+func tomlToConfig(name string, tc *TomlProviderConfig, port int) *Config {
 	cfg := DefaultConfig()
 	cfg.TargetBase = tc.Target
 	cfg.GenaiBase = tc.Genai
-	if tc.Port > 0 {
-		cfg.Port = tc.Port
+	if port > 0 {
+		cfg.Port = port
 	}
 	if tc.CooldownSec > 0 {
 		cfg.CooldownSec = tc.CooldownSec
@@ -475,11 +477,11 @@ func tomlToConfig(name string, tc *TomlProviderConfig) *Config {
 // configToToml 将 *Config 转换为 *TomlConfig（用于写入 TOML 文件）。
 func configToToml(cfg *Config) *TomlConfig {
 	return &TomlConfig{
+		Port: cfg.Port,
 		Provider: map[string]TomlProviderConfig{
 			"default": {
 				Target:                 cfg.TargetBase,
 				Genai:                  cfg.GenaiBase,
-				Port:                   cfg.Port,
 				CooldownSec:            cfg.CooldownSec,
 				MaxRetries:             cfg.MaxRetries,
 				DisableThinking:        cfg.DisableThinking,
