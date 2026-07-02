@@ -143,123 +143,6 @@ func TestSanitized_UsesUtilsMaskKey(t *testing.T) {
 	}
 }
 
-func TestDiff(t *testing.T) {
-	old := &Config{
-		Port:        8080,
-		TargetBase:  "https://old.example.com",
-		GenaiBase:   "https://ai.old.example.com",
-		AdminToken:  "secret1",
-		MaxRetries:  3,
-		LogLevel:    "info",
-		CooldownSec: 60,
-		Keys:        []string{"nvapi-old-key1", "nvapi-old-key2"},
-	}
-	new := &Config{
-		Port:        8081,
-		TargetBase:  "https://new.example.com",
-		GenaiBase:   "https://ai.new.example.com",
-		AdminToken:  "secret2",
-		MaxRetries:  5,
-		LogLevel:    "debug",
-		CooldownSec: 30,
-		Keys:        []string{"nvapi-new-key1"},
-	}
-
-	changes := old.Diff(new)
-
-	// Build lookup
-	changeMap := make(map[string]ConfigChange)
-	for _, c := range changes {
-		changeMap[c.Field] = c
-	}
-
-	// Check PORT
-	if c, ok := changeMap["PORT"]; !ok {
-		t.Error("Diff missing PORT change")
-	} else if c.OldValue != "8080" || c.NewValue != "8081" {
-		t.Errorf("PORT change: got %v", c)
-	}
-
-	// Check TARGET_BASE_URL
-	if _, ok := changeMap["TARGET_BASE_URL"]; !ok {
-		t.Error("Diff missing TARGET_BASE_URL change")
-	}
-
-	// Check ADMIN_TOKEN is redacted
-	if c, ok := changeMap["ADMIN_TOKEN"]; !ok {
-		t.Error("Diff missing ADMIN_TOKEN change")
-	} else if c.OldValue != "(redacted)" || c.NewValue != "(redacted)" {
-		t.Errorf("ADMIN_TOKEN should be redacted, got %v", c)
-	}
-
-	// Check API_KEYS — values should be masked
-	if c, ok := changeMap["API_KEYS"]; !ok {
-		t.Error("Diff missing API_KEYS change")
-	} else {
-		// Old: two keys masked individually and joined: "nvap...key1,nvap...key2"
-		// New: single key masked: "nvap...key1"
-		if c.OldValue != "nvap...key1,nvap...key2" {
-			t.Errorf("API_KEYS old (masked) = %q, want %q", c.OldValue, "nvap...key1,nvap...key2")
-		}
-		if c.NewValue != "nvap...key1" {
-			t.Errorf("API_KEYS new (masked) = %q, want %q", c.NewValue, "nvap...key1")
-		}
-	}
-
-	// Check that unchanged fields are not in diff
-	if _, ok := changeMap["DISABLE_THINKING"]; ok {
-		t.Error("Diff should not include DISABLE_THINKING (unchanged)")
-	}
-}
-
-func TestDiff_NoChanges(t *testing.T) {
-	cfg := DefaultConfig()
-	cfg.TargetBase = "https://example.com"
-	cfg.GenaiBase = "https://ai.example.com"
-	cfg.Keys = []string{"nvapi-key1"}
-
-	changes := cfg.Diff(cfg)
-	if len(changes) != 0 {
-		t.Errorf("Diff with same config should be empty, got %v", changes)
-	}
-}
-
-
-func TestDiff_NamedKeys(t *testing.T) {
-	// Named keys diff should serialize names alongside masked keys
-	oldCfg := DefaultConfig()
-	oldCfg.TargetBase = "https://example.com"
-	oldCfg.GenaiBase = "https://ai.example.com"
-	oldCfg.Keys = []string{"nvapi-key1", "nvapi-key2"}
-	oldCfg.KeyNames = []string{"主账号", "备用key"}
-
-	newCfg := DefaultConfig()
-	newCfg.TargetBase = "https://example.com"
-	newCfg.GenaiBase = "https://ai.example.com"
-	newCfg.Keys = []string{"nvapi-key3"}
-	newCfg.KeyNames = []string{"新key"}
-
-	changes := oldCfg.Diff(newCfg)
-	changeMap := make(map[string]string)
-	for _, c := range changes {
-		changeMap[c.Field] = c.NewValue
-	}
-
-	if c, ok := changeMap["API_KEYS"]; !ok {
-		t.Error("Diff should include API_KEYS")
-	} else {
-		// Should contain masked key names in the serialized form
-		if c != "****==新key" {
-			t.Errorf("API_KEYS new value = %q, want %q", c, "****==新key")
-		}
-
-		// Check old value also has names
-		oldVal := changeMap["API_KEYS"]
-		_ = oldVal // old value also serialized; just checking new is enough
-	}
-}
-
-
 func TestConfig_HealthCheckDefaults(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.HealthCheckIntervalSec != 30 {
@@ -445,8 +328,8 @@ func TestSaveToml_LoadToml_Roundtrip(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "roundtrip.toml")
-	if err := SaveToml(orig, tomlPath); err != nil {
-		t.Fatalf("SaveToml() error: %v", err)
+	if err := SaveTomlConfig(configToToml(orig), tomlPath); err != nil {
+		t.Fatalf("SaveTomlConfig() error: %v", err)
 	}
 
 	loaded, err := LoadToml(tomlPath)
@@ -663,8 +546,8 @@ func TestTomlProviderConfig_Roundtrip(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "roundtrip_ext.toml")
-	if err := SaveToml(orig, tomlPath); err != nil {
-		t.Fatalf("SaveToml() error: %v", err)
+	if err := SaveTomlConfig(configToToml(orig), tomlPath); err != nil {
+		t.Fatalf("SaveTomlConfig() error: %v", err)
 	}
 
 	loaded, err := LoadToml(tomlPath)
@@ -889,3 +772,4 @@ genai = "https://ai.example.com"
 		t.Errorf("MaxRetries = %d, want default 3", cfg.MaxRetries)
 	}
 }
+

@@ -52,14 +52,7 @@ func startServer(dashboardHTML string, providerFilter string) {
 	// ── Create ProviderRouter ─────────────────────────
 	router := server.NewProviderRouter(dashboardHTML)
 
-	// Determine single port from the first configured provider's config
-	port := 0
-	for _, cfg := range providers {
-		if port == 0 && cfg.Port > 0 {
-			port = cfg.Port
-			break
-		}
-	}
+	port := config.FindServerPort(xdgPath)
 
 	for name, cfg := range providers {
 		// Apply provider filter first

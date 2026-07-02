@@ -498,3 +498,18 @@ func configToToml(cfg *Config) *TomlConfig {
 		},
 	}
 }
+
+// FindServerPort finds the first non-zero port from TOML providers.
+// Returns 0 if no port is configured or if the TOML file cannot be loaded.
+func FindServerPort(xdgPath string) int {
+	providers, err := LoadAllTomlProviders(xdgPath)
+	if err != nil {
+		return 0
+	}
+	for _, cfg := range providers {
+		if cfg.Port > 0 {
+			return cfg.Port
+		}
+	}
+	return 0
+}

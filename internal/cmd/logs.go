@@ -27,13 +27,8 @@ var logsCmd = &cobra.Command{
 		// Determine the server port from config or default
 		port := adminPort
 		if xdgPath, err := config.XDGConfigPath(); err == nil {
-			if providers, err := config.LoadAllTomlProviders(xdgPath); err == nil {
-				for _, cfg := range providers {
-					if cfg.Port > 0 {
-						port = cfg.Port
-						break
-					}
-				}
+			if p := config.FindServerPort(xdgPath); p > 0 {
+				port = p
 			}
 		}
 

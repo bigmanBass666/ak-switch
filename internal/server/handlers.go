@@ -107,7 +107,7 @@ func (pr *ProviderRouter) proxyHandler(w http.ResponseWriter, r *http.Request) {
 	pr.executeProxy(w, r, ps)
 }
 
-// executeProxy contains the core proxy request logic (adapted from ServerState.proxyHandler).
+// executeProxy contains the core proxy request logic.
 func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, ps *ProviderState) {
 	cfg := ps.Config
 	pool := ps.Pool
@@ -118,10 +118,6 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 	start := time.Now()
 	var lastKey string
 	var lastIdx int
-	recordMetrics := func(statusClass, keyIndex string) {
-		pr.metrics.RequestsTotal.WithLabelValues(r.Method, statusClass, keyIndex).Inc()
-		pr.metrics.RequestDuration.WithLabelValues(r.Method, statusClass).Observe(time.Since(start).Seconds())
-	}
 
 	var bodyBytes []byte
 	if r.Body != nil {
@@ -131,7 +127,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		r.Body.Close()
 		if err != nil {
 			writeProxyError(w, http.StatusBadRequest, ErrorBadRequest, "request body too large or unreadable")
-			recordMetrics("4xx", "")
+			pr.recordProxyMetrics(r.Method, "4xx", "", start)
 			return
 		}
 	}
@@ -186,7 +182,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 			wait := pool.TimeUntilAvailable()
 			if wait < 0 {
 				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
-				recordMetrics("5xx", "")
+				pr.recordProxyMetrics(r.Method, "5xx", "", start)
 				return
 			}
 			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
@@ -209,7 +205,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 				}
 				if allPerma {
 					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
-					recordMetrics("5xx", "")
+					pr.recordProxyMetrics(r.Method, "5xx", "", start)
 					return
 				}
 				continue
@@ -226,7 +222,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		if err != nil {
 			pr.metrics.UpstreamErrors.WithLabelValues("network").Inc()
 			writeProxyError(w, http.StatusInternalServerError, ErrorUpstreamError, "failed to build upstream request")
-			recordMetrics("5xx", "")
+			pr.recordProxyMetrics(r.Method, "5xx", "", start)
 			return
 		}
 		utils.CopyHeaders(req.Header, r.Header)
@@ -246,129 +242,207 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 			}
 		}
 
-		switch resp.StatusCode {
-		case http.StatusTooManyRequests:
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			keyCBs[idx].RecordFailure()
-			cooldown := time.Duration(cfg.CooldownSec) * time.Second
-			if ra := resp.Header.Get("Retry-After"); ra != "" {
-				if secs, err := strconv.Atoi(ra); err == nil {
-					cooldown = time.Duration(secs+2) * time.Second
-				}
-			}
-			pool.Cooldown(idx, cooldown)
-			slog.Warn("key rate limited", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_attempt", keyCBs[idx].Attempt(), "body_preview", string(body))
-			pr.metrics.UpstreamErrors.WithLabelValues("rate_limited").Inc()
-			if keyCBs[idx].State() == circuitbreaker.StatePermanent {
-				slog.Warn("key quota exhausted, disabling permanently", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx))
-				pool.Disable(idx)
-				if pool.ActiveCount() == 0 {
-					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
-					recordMetrics("5xx", "")
-					return
-				}
-			}
-			continue
-
-		case http.StatusBadGateway, http.StatusServiceUnavailable:
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			slog.Warn("upstream server error", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
-			pr.metrics.UpstreamErrors.WithLabelValues("server_error").Inc()
-			upCB.RecordFailure()
-			continue
-
-		case http.StatusUnauthorized, http.StatusForbidden:
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			slog.Warn("key disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
-			pr.metrics.UpstreamErrors.WithLabelValues("auth_rejected").Inc()
-			pool.Disable(idx)
-			keyCBs[idx].RecordPerma("auth_rejected")
-			if pool.ActiveCount() == 0 {
-				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys are invalid or revoked")
-				recordMetrics("5xx", "")
+		// ── Response status dispatch ──
+		switch {
+		case resp.StatusCode == http.StatusTooManyRequests:
+			if pr.handleRateLimited(w, ps, idx, resp, cfg, start, r.Method, target, bodyBytes) {
 				return
 			}
 			continue
-		}
 
-		if cat := categorizeError(resp.StatusCode, nil); cat == CatNonRetryable {
-			utils.CopyHeaders(w.Header(), resp.Header)
-			w.WriteHeader(resp.StatusCode)
-			io.Copy(w, resp.Body)
-			resp.Body.Close()
-
-			pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: attempt + 1, Provider: ps.Name})
-			slog.Warn("non-retryable client error", "provider", ps.Name, "method", r.Method, "url", target, "status", resp.StatusCode)
-			slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
-			recordMetrics("4xx", fmt.Sprintf("%d", idx))
-			return
-		}
-
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			utils.CopyHeaders(w.Header(), resp.Header)
-			w.WriteHeader(resp.StatusCode)
-			io.Copy(w, resp.Body)
-			resp.Body.Close()
-
-			pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: attempt + 1, Provider: ps.Name})
-			slog.Warn("terminal client error", "provider", ps.Name, "method", r.Method, "url", target, "status", resp.StatusCode)
-			slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
-			recordMetrics("4xx", fmt.Sprintf("%d", idx))
-			return
-		}
-
-		if resp.StatusCode >= 500 {
-			body, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			slog.Warn("upstream error, retrying", "provider", ps.Name, "status", resp.StatusCode, "body_preview", string(body))
-			pr.metrics.UpstreamErrors.WithLabelValues("server_error").Inc()
-			upCB.RecordFailure()
+		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+			if pr.handleAuthRejected(w, ps, idx, resp, start, r.Method, target, bodyBytes) {
+				return
+			}
 			continue
+
+		case resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable:
+			pr.handleServerError(ps, idx, resp, attempt)
+			continue
+
+		case resp.StatusCode >= 400 && resp.StatusCode < 500 || categorizeError(resp.StatusCode, nil) == CatNonRetryable:
+			pr.handleNonRetryable(w, ps, idx, resp, start, r.Method, target, bodyBytes, attempt, key)
+			return
+
+		case resp.StatusCode >= 500:
+			pr.handleServerError(ps, idx, resp, attempt)
+			continue
+
+		default:
+			// 2xx/3xx — success
+			pr.handleSuccess(w, ps, idx, resp, start, r.Method, target, bodyBytes, attempt, key)
+			return
 		}
+	}
 
-		// Success (2xx/3xx)
-		keyCBs[idx].RecordSuccess()
-		upCB.RecordSuccess()
+	// Retry exhausted
+	writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, "exhausted all retries")
+	pr.logs.Append(utils.LogEntry{
+		Timestamp:       time.Now().Format(time.RFC3339),
+		Key:             lastKey,
+		KeyIndex:        lastIdx + 1,
+		KeyName:         pool.Name(lastIdx),
+		Method:          r.Method,
+		URL:             target,
+		Status:          http.StatusServiceUnavailable,
+		RequestBodySize: len(bodyBytes),
+		DurationMs:      time.Since(start).Milliseconds(),
+		Attempt:         cfg.MaxRetries,
+		Provider:        ps.Name,
+	})
+	slog.Debug("proxy response debug", "status", 503, "duration_ms", time.Since(start).Seconds()*1000, "retries", cfg.MaxRetries)
+	pr.recordProxyMetrics(r.Method, "5xx", "", start)
+}
 
-		utils.CopyHeaders(w.Header(), resp.Header)
-		w.WriteHeader(resp.StatusCode)
+// ── Response Status Handlers ───────────────────────────
 
-		if f, ok := w.(http.Flusher); ok {
-			buf := make([]byte, 4096)
-			for {
-				n, rerr := resp.Body.Read(buf)
-				if n > 0 {
-					if _, werr := w.Write(buf[:n]); werr != nil {
-						break
-					}
-					f.Flush()
-				}
-				if rerr != nil {
+// handleRateLimited processes a 429 Too Many Requests response.
+// It records the failure, applies cooldown (respecting Retry-After headers),
+// and returns true if all keys are exhausted (caller should abort).
+// When returning true, the error response has already been written to w.
+func (pr *ProviderRouter) handleRateLimited(w http.ResponseWriter, ps *ProviderState, idx int, resp *http.Response, cfg *config.Config, start time.Time, method, target string, bodyBytes []byte) bool {
+	pool := ps.Pool
+	keyCBs := ps.Proxy.keyCBs
+
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	keyCBs[idx].RecordFailure()
+	cooldown := time.Duration(cfg.CooldownSec) * time.Second
+	if ra := resp.Header.Get("Retry-After"); ra != "" {
+		if secs, err := strconv.Atoi(ra); err == nil {
+			cooldown = time.Duration(secs+2) * time.Second
+		}
+	}
+	pool.Cooldown(idx, cooldown)
+	slog.Warn("key rate limited", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_attempt", keyCBs[idx].Attempt(), "body_preview", string(body))
+	pr.metrics.UpstreamErrors.WithLabelValues("rate_limited").Inc()
+
+	if keyCBs[idx].State() == circuitbreaker.StatePermanent {
+		slog.Warn("key quota exhausted, disabling permanently", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx))
+		pool.Disable(idx)
+		if pool.ActiveCount() == 0 {
+			writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+			pr.recordProxyMetrics(method, "5xx", "", start)
+			return true
+		}
+	}
+	return false
+}
+
+// handleAuthRejected processes a 401 Unauthorized or 403 Forbidden response.
+// It disables the key permanently and returns true if all keys are exhausted.
+// When returning true, the error response has already been written to w.
+func (pr *ProviderRouter) handleAuthRejected(w http.ResponseWriter, ps *ProviderState, idx int, resp *http.Response, start time.Time, method, target string, bodyBytes []byte) bool {
+	pool := ps.Pool
+	keyCBs := ps.Proxy.keyCBs
+
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	slog.Warn("key disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
+	pr.metrics.UpstreamErrors.WithLabelValues("auth_rejected").Inc()
+	pool.Disable(idx)
+	keyCBs[idx].RecordPerma("auth_rejected")
+	if pool.ActiveCount() == 0 {
+		writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys are invalid or revoked")
+		pr.recordProxyMetrics(method, "5xx", "", start)
+		return true
+	}
+	return false
+}
+
+// handleServerError processes a 502 Bad Gateway or 503 Service Unavailable (or other 5xx) response.
+// It logs the error, records metrics, and records an upstream circuit breaker failure.
+func (pr *ProviderRouter) handleServerError(ps *ProviderState, idx int, resp *http.Response, attempt int) {
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	slog.Warn("upstream server error", "provider", ps.Name, "key_index", idx, "key_name", ps.Pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
+	pr.metrics.UpstreamErrors.WithLabelValues("server_error").Inc()
+	ps.Proxy.upCB.RecordFailure()
+}
+
+// handleNonRetryable copies a non-retryable 4xx response through to the client
+// without further retry attempts.
+func (pr *ProviderRouter) handleNonRetryable(w http.ResponseWriter, ps *ProviderState, idx int, resp *http.Response, start time.Time, method, target string, bodyBytes []byte, attempt int, key string) {
+	utils.CopyHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+	resp.Body.Close()
+
+	pr.logs.Append(buildLogEntry(ps, key, idx, method, target, resp.StatusCode, len(bodyBytes), start, attempt+1))
+	slog.Warn("non-retryable client error", "provider", ps.Name, "method", method, "url", target, "status", resp.StatusCode)
+	slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
+	pr.recordProxyMetrics(method, "4xx", fmt.Sprintf("%d", idx), start)
+}
+
+// handleSuccess processes a successful 2xx/3xx response, including streaming
+// for SSE and chunked responses.
+func (pr *ProviderRouter) handleSuccess(w http.ResponseWriter, ps *ProviderState, idx int, resp *http.Response, start time.Time, method, target string, bodyBytes []byte, attempt int, key string) {
+	pool := ps.Pool
+	keyCBs := ps.Proxy.keyCBs
+	upCB := ps.Proxy.upCB
+
+	keyCBs[idx].RecordSuccess()
+	upCB.RecordSuccess()
+
+	utils.CopyHeaders(w.Header(), resp.Header)
+	w.WriteHeader(resp.StatusCode)
+
+	streamResponse(w, resp)
+
+	pool.IncrementRequestCount(idx)
+	pr.logs.Append(buildLogEntry(ps, key, idx, method, target, resp.StatusCode, len(bodyBytes), start, attempt+1))
+	slog.Info("proxy success", "provider", ps.Name, "method", method, "url", target, "status", resp.StatusCode, "key_index", idx, "key_name", pool.Name(idx), "attempt", attempt+1)
+	slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
+	pr.recordProxyMetrics(method, alvusmetrics.StatusLabel(resp.StatusCode), fmt.Sprintf("%d", idx), start)
+}
+
+// ── Proxy Helpers ──────────────────────────────────────
+
+// buildLogEntry creates a structured LogEntry for proxy request logging.
+func buildLogEntry(ps *ProviderState, key string, idx int, method, target string, status int, bodySize int, start time.Time, attempt int) utils.LogEntry {
+	return utils.LogEntry{
+		Timestamp:       time.Now().Format(time.RFC3339),
+		Key:             key,
+		KeyIndex:        idx + 1,
+		KeyName:         ps.Pool.Name(idx),
+		Method:          method,
+		URL:             target,
+		Status:          status,
+		RequestBodySize: bodySize,
+		DurationMs:      time.Since(start).Milliseconds(),
+		Attempt:         attempt,
+		Provider:        ps.Name,
+	}
+}
+
+// recordProxyMetrics records request total count and duration metrics.
+func (pr *ProviderRouter) recordProxyMetrics(method, statusClass, keyIndex string, start time.Time) {
+	pr.metrics.RequestsTotal.WithLabelValues(method, statusClass, keyIndex).Inc()
+	pr.metrics.RequestDuration.WithLabelValues(method, statusClass).Observe(time.Since(start).Seconds())
+}
+
+// streamResponse copies the response body to the client writer, flushing after
+// each chunk for SSE compatibility. It always closes resp.Body.
+func streamResponse(w http.ResponseWriter, resp *http.Response) {
+	if f, ok := w.(http.Flusher); ok {
+		buf := make([]byte, 4096)
+		for {
+			n, rerr := resp.Body.Read(buf)
+			if n > 0 {
+				if _, werr := w.Write(buf[:n]); werr != nil {
 					break
 				}
+				f.Flush()
 			}
-		} else {
-			io.Copy(w, resp.Body)
+			if rerr != nil {
+				break
+			}
 		}
-		resp.Body.Close()
-
-		pool.IncrementRequestCount(idx)
-		pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: attempt + 1, Provider: ps.Name})
-		slog.Info("proxy success", "provider", ps.Name, "method", r.Method, "url", target, "status", resp.StatusCode, "key_index", idx, "key_name", pool.Name(idx), "attempt", attempt+1)
-		slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
-		recordMetrics(alvusmetrics.StatusLabel(resp.StatusCode), fmt.Sprintf("%d", idx))
-		return
+	} else {
+		io.Copy(w, resp.Body)
 	}
-
-		writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, "exhausted all retries")
-		pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: lastKey, KeyIndex: lastIdx + 1, KeyName: pool.Name(lastIdx), Method: r.Method, URL: target, Status: http.StatusServiceUnavailable, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: cfg.MaxRetries, Provider: ps.Name})
-		slog.Debug("proxy response debug", "status", 503, "duration_ms", time.Since(start).Seconds()*1000, "retries", cfg.MaxRetries)
-		recordMetrics("5xx", "")
-	}
-
+	resp.Body.Close()
+}
 
 // ── Management Handlers ────────────────────────────────
 
