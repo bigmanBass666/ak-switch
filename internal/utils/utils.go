@@ -14,7 +14,7 @@ type LogEntry struct {
 	URL             string `json:"url"`
 	Status          int    `json:"status"`
 	RequestBodySize int    `json:"request_body_size"`
-	DurationMs      int64  `json:"duration_ms,omitempty"`
+	DurationMs      int64  `json:"duration_ms"`
 	Attempt         int    `json:"attempt,omitempty"`
 	Provider        string `json:"provider,omitempty"`
 }
