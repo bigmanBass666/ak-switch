@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"alvus/internal/config"
@@ -64,7 +65,34 @@ var logsCmd = &cobra.Command{
 			path := getStrField(entryMap, "url", "?")
 			status := getStrField(entryMap, "status", "?")
 			ts := getStrField(entryMap, "timestamp", "?")
-			fmt.Printf("  [%s] %s %s -> %s\n", ts, method, path, status)
+
+			provider := getStrField(entryMap, "provider", "")
+			duration := getStrField(entryMap, "duration_ms", "")
+			attempt := getStrField(entryMap, "attempt", "")
+			keyName := getStrField(entryMap, "key_name", "")
+
+			var extras []string
+			if attempt != "" {
+				extras = append(extras, "attempt "+attempt)
+			}
+			if duration != "" {
+				extras = append(extras, duration+"ms")
+			}
+			if keyName != "" {
+				extras = append(extras, "key: "+keyName)
+			}
+
+			prefix := fmt.Sprintf("  [%s]", ts)
+			if provider != "" {
+				prefix += " " + provider
+			}
+
+			extraStr := ""
+			if len(extras) > 0 {
+				extraStr = " (" + strings.Join(extras, ", ") + ")"
+			}
+
+			fmt.Printf("%s %s %s -> %s%s\n", prefix, method, path, status, extraStr)
 		}
 
 		return nil

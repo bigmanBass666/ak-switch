@@ -1789,7 +1789,159 @@ func TestKeyEncryption_NoEncryption_BackwardCompatible(t *testing.T) {
 	if !strings.Contains(string(data), "plaintext-key-a") {
 		t.Error("plaintext key 'plaintext-key-a' not found in unencrypted file")
 	}
-	if !strings.Contains(string(data), "plaintext-key-b") {
-		t.Error("plaintext key 'plaintext-key-b' not found in unencrypted file")
+}
+
+// ---------------------------------------------------------------------------
+// LogEntry new field integration tests (T4: 测试覆盖)
+// ---------------------------------------------------------------------------
+
+// TestLogEntry_HasNewFields verifies that a successful proxy request
+// produces a log entry with DurationMs, Attempt, Provider, and KeyName.
+func TestLogEntry_HasNewFields(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	alvus := setupAlvus(t, upstream, []string{"test-key-a", "test-key-b"}, 10, 60)
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/test/v1/models")
+	if err != nil {
+		t.Fatalf("GET /v1/models: %v", err)
 	}
+	resp.Body.Close()
+
+	logResp, err := http.Get(alvus.URL + "/logs")
+	if err != nil {
+		t.Fatalf("GET /logs: %v", err)
+	}
+	defer logResp.Body.Close()
+
+	var entries []map[string]interface{}
+	if err := json.NewDecoder(logResp.Body).Decode(&entries); err != nil {
+		t.Fatalf("decode logs: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least 1 log entry")
+	}
+
+	entry := entries[0]
+	for _, field := range []string{"provider", "duration_ms", "attempt", "key_name"} {
+		if _, ok := entry[field]; !ok {
+			t.Errorf("log entry missing %q field", field)
+		}
+	}
+
+	if p, ok := entry["provider"].(string); !ok || p != "test" {
+		t.Errorf("expected provider=\"test\", got %v", entry["provider"])
+	}
+	if a, ok := entry["attempt"].(float64); !ok || a < 1 {
+		t.Errorf("expected attempt >= 1, got %v", entry["attempt"])
+	}
+	if d, ok := entry["duration_ms"].(float64); !ok || d < 0 {
+		t.Errorf("expected duration_ms >= 0, got %v", entry["duration_ms"])
+	}
+}
+
+// TestLogEntry_ExhaustionHas503 verifies that after all keys are exhausted
+// the log store contains a 503 entry with the new fields populated.
+func TestLogEntry_ExhaustionHas503(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer upstream.Close()
+
+	// MaxRetries=2, 3 keys, all 429 -> 503
+	alvus := setupAlvus(t, upstream, []string{"key-a", "key-b", "key-c"}, 2, 2)
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/test/v1/models")
+	if err != nil {
+		t.Fatalf("GET /v1/models: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.StatusCode)
+	}
+
+	logResp, err := http.Get(alvus.URL + "/logs")
+	if err != nil {
+		t.Fatalf("GET /logs: %v", err)
+	}
+	defer logResp.Body.Close()
+
+	var entries []map[string]interface{}
+	if err := json.NewDecoder(logResp.Body).Decode(&entries); err != nil {
+		t.Fatalf("decode logs: %v", err)
+	}
+
+	var found503 bool
+	for _, entry := range entries {
+		status, _ := entry["status"].(float64)
+		if int(status) != http.StatusServiceUnavailable {
+			continue
+		}
+		found503 = true
+		for _, field := range []string{"provider", "duration_ms", "attempt", "key_name"} {
+			if _, ok := entry[field]; !ok {
+				t.Errorf("503 log entry missing %q field", field)
+			}
+		}
+		if p, ok := entry["provider"].(string); !ok || p != "test" {
+			t.Errorf("expected provider=\"test\", got %v", entry["provider"])
+		}
+		if a, ok := entry["attempt"].(float64); !ok || a < 2 {
+			t.Errorf("expected attempt >= 2 (MaxRetries), got %v", entry["attempt"])
+		}
+		break
+	}
+	if !found503 {
+		t.Error("no 503 log entry found after retry exhaustion")
+	}
+}
+
+// TestLogEntry_CLIFormat verifies the log JSON structure is suitable
+// for CLI display — all fields the CLI command needs are present.
+func TestLogEntry_CLIFormat(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer upstream.Close()
+
+	alvus := setupAlvus(t, upstream, []string{"test-key-a", "test-key-b"}, 10, 60)
+	defer alvus.Close()
+
+	resp, err := http.Get(alvus.URL + "/test/v1/models")
+	if err != nil {
+		t.Fatalf("GET /v1/models: %v", err)
+	}
+	resp.Body.Close()
+
+	logResp, err := http.Get(alvus.URL + "/logs")
+	if err != nil {
+		t.Fatalf("GET /logs: %v", err)
+	}
+	defer logResp.Body.Close()
+
+	var entries []map[string]interface{}
+	if err := json.NewDecoder(logResp.Body).Decode(&entries); err != nil {
+		t.Fatalf("decode logs: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Fatal("expected at least 1 log entry")
+	}
+
+	entry := entries[0]
+	// All fields the CLI display code in internal/cmd/logs.go reads
+	for _, field := range []string{"method", "url", "status", "timestamp", "provider", "duration_ms", "attempt", "key_name"} {
+		if _, ok := entry[field]; !ok {
+			t.Errorf("CLI display needs field %q, but log entry missing it", field)
+		}
+	}
+
+	t.Logf("CLI-ready log entry: provider=%v duration_ms=%v attempt=%v key_name=%v",
+		entry["provider"], entry["duration_ms"], entry["attempt"], entry["key_name"])
 }

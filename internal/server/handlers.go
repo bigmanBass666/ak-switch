@@ -116,6 +116,8 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 	upCB := ps.Proxy.upCB
 
 	start := time.Now()
+	var lastKey string
+	var lastIdx int
 	recordMetrics := func(statusClass, keyIndex string) {
 		pr.metrics.RequestsTotal.WithLabelValues(r.Method, statusClass, keyIndex).Inc()
 		pr.metrics.RequestDuration.WithLabelValues(r.Method, statusClass).Observe(time.Since(start).Seconds())
@@ -192,6 +194,8 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 			time.Sleep(wait + jitter)
 			continue
 		}
+		lastKey = key
+		lastIdx = idx
 
 		if !keyCBs[idx].Allow() {
 			remaining := keyCBs[idx].CooldownRemaining()
@@ -296,7 +300,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 			io.Copy(w, resp.Body)
 			resp.Body.Close()
 
-			pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes)})
+			pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: attempt + 1, Provider: ps.Name})
 			slog.Warn("non-retryable client error", "provider", ps.Name, "method", r.Method, "url", target, "status", resp.StatusCode)
 			slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
 			recordMetrics("4xx", fmt.Sprintf("%d", idx))
@@ -309,7 +313,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 			io.Copy(w, resp.Body)
 			resp.Body.Close()
 
-			pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes)})
+			pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: attempt + 1, Provider: ps.Name})
 			slog.Warn("terminal client error", "provider", ps.Name, "method", r.Method, "url", target, "status", resp.StatusCode)
 			slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
 			recordMetrics("4xx", fmt.Sprintf("%d", idx))
@@ -352,17 +356,19 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		resp.Body.Close()
 
 		pool.IncrementRequestCount(idx)
-		pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes)})
+		pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: key, KeyIndex: idx + 1, KeyName: pool.Name(idx), Method: r.Method, URL: target, Status: resp.StatusCode, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: attempt + 1, Provider: ps.Name})
 		slog.Info("proxy success", "provider", ps.Name, "method", r.Method, "url", target, "status", resp.StatusCode, "key_index", idx, "key_name", pool.Name(idx), "attempt", attempt+1)
 		slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
 		recordMetrics(alvusmetrics.StatusLabel(resp.StatusCode), fmt.Sprintf("%d", idx))
 		return
 	}
 
-	writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, "exhausted all retries")
-	slog.Debug("proxy response debug", "status", 503, "duration_ms", time.Since(start).Seconds()*1000, "retries", cfg.MaxRetries)
-	recordMetrics("5xx", "")
-}
+		writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, "exhausted all retries")
+		pr.logs.Append(utils.LogEntry{Timestamp: time.Now().Format(time.RFC3339), Key: lastKey, KeyIndex: lastIdx + 1, KeyName: pool.Name(lastIdx), Method: r.Method, URL: target, Status: http.StatusServiceUnavailable, RequestBodySize: len(bodyBytes), DurationMs: time.Since(start).Milliseconds(), Attempt: cfg.MaxRetries, Provider: ps.Name})
+		slog.Debug("proxy response debug", "status", 503, "duration_ms", time.Since(start).Seconds()*1000, "retries", cfg.MaxRetries)
+		recordMetrics("5xx", "")
+	}
+
 
 // ── Management Handlers ────────────────────────────────
 

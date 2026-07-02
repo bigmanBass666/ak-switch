@@ -4,11 +4,17 @@
 
 ---
 
-✅ **功能完整，265 测试通过（其中 72 个暂跳待适配）。**
+✅ **功能完整，268 测试通过（其中 72 个暂跳待适配）。**
 
 ---
 
 ## 已完成
+
+### 日志条目增强（PR #36）
+- LogEntry 新增 DurationMs/Attempt/Provider 字段
+- 重试耗尽路径新增日志记录
+- CLI `alvus logs` 命令新增 provider/attempt/duration/key_name 展示
+- 集成测试验证新字段存在 + 重试耗尽日志记录
 
 ### 单端口 + 路径路由重构（PR #32）
 - 从"一个 provider 一个端口"改为"单端口 + `/{provider}/...` 路径路由"
@@ -82,7 +88,7 @@
 | 文件 | 测试数 | 类型 |
 |------|--------|------|
 | `internal/config/config_test.go` | 51 | 单元测试 |
-| `proxy_test.go` | 35 | **集成验收测试** |
+| `proxy_test.go` | 38 | **集成验收测试** |
 | `handlers_test.go` | 26 | Handler 测试 |
 | `internal/keypool/*_test.go` | 40 | 单元测试 |
 | `internal/circuitbreaker/*_test.go` | 19 | 单元测试 |
@@ -130,3 +136,4 @@
 ## 待议
 
 - **全 Key 熔断错误提示** — 某 provider 所有 Key 都熔断时，是否应返回类似 `"sensenova 所有 API Key 已熔断"` 的明确错误信息？（参考 ccswitch 的"所有供应商已熔断，无可用渠道"）
+- 关于更改项目名以及整个 IP 的名字，会很麻烦吗？我想改名为 AK switch，也就是 API key switch 的简称。我们现在整个 IP 的名字是不是硬编码了呀？是不是不方便？一般来说，大家都是怎么处理这个品牌名字的？如果说频繁变动的话，是不是硬编码就不方便了？包括GitHub仓库的名字以及URL的地址,这些能不能方便地更改
