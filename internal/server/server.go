@@ -178,7 +178,7 @@ func ApplyLogLevel(level string) {
 	default:
 		lvl = slog.LevelInfo
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl})))
+	slog.SetDefault(slog.New(newHandler(os.Stderr, lvl)))
 }
 
 // MaskSensitiveData scrubs potential API key patterns from a string for safe debug logging.
