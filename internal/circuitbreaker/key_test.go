@@ -68,14 +68,23 @@ func TestKeyCircuitBreaker_ReachesCap(t *testing.T) {
 	cb.RecordFailure()
 	// attempt=1 → raw=60s < 120s → OPEN
 	cb.RecordFailure()
-	// attempt=2 → raw=120s >= 120s → PERMA
+	// attempt=2 → raw=120s >= 120s → OPEN with long cooldown (not PERMANENT)
 	cb.RecordFailure()
 
-	if cb.State() != StatePermanent {
-		t.Errorf("State() = %d, want %d", cb.State(), StatePermanent)
+	if cb.State() != StateOpen {
+		t.Errorf("State() = %d, want %d (StateOpen)", cb.State(), StateOpen)
 	}
 	if cb.Allow() {
-		t.Error("Allow() = true, want false")
+		t.Error("Allow() = true, want false (key should still be cooling)")
+	}
+	// Cooldown should be approximately backoffCap (120s)
+	remaining := cb.CooldownRemaining()
+	if remaining <= 0 || remaining > 121*time.Second {
+		t.Errorf("CooldownRemaining() = %v, want ~120s (backoffCap)", remaining)
+	}
+	// Attempt should be reset to 0
+	if cb.Attempt() != 0 {
+		t.Errorf("Attempt() = %d, want 0 (reset after cap)", cb.Attempt())
 	}
 }
 

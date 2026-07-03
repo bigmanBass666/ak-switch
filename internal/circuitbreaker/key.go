@@ -40,8 +40,8 @@ func NewKeyCircuitBreaker(base, backoffCap time.Duration, multiplier float64) *K
 }
 
 // RecordFailure records a 429 response and applies exponential backoff.
-// If the computed backoff reaches the cap, the key is permanently disabled
-// (considered quota exhausted).
+// Once the computed backoff reaches the cap, the key enters a long cooldown
+// (equal to the cap duration) rather than permanent disable.
 func (k *KeyCircuitBreaker) RecordFailure() {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -53,10 +53,12 @@ func (k *KeyCircuitBreaker) RecordFailure() {
 	// Calculate raw cooldown before capping
 	raw := k.base * time.Duration(math.Pow(k.multiplier, float64(k.attempt)))
 
-	// If raw cooldown reaches or exceeds backoffCap, mark as permanent.
+	// If raw cooldown reaches or exceeds backoffCap, use a long cooldown
+	// at the cap duration instead of permanent disable.
 	if raw >= k.backoffCap {
-		k.state = StatePermanent
-		k.trippedReason = "quota_exhausted"
+		k.state = StateOpen
+		k.cooldownUntil = time.Now().Add(k.backoffCap)
+		k.attempt = 0
 		return
 	}
 
@@ -98,6 +100,18 @@ func (k *KeyCircuitBreaker) RecordSuccess() {
 	k.state = StateClosed
 	k.attempt = 0
 	k.cooldownUntil = time.Time{}
+}
+
+// Reset fully resets the breaker to closed state, clearing any cooldown
+// or permanent failure. Unlike RecordSuccess, this also works on keys
+// in the StatePermanent state.
+func (k *KeyCircuitBreaker) Reset() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.state = StateClosed
+	k.attempt = 0
+	k.cooldownUntil = time.Time{}
+	k.trippedReason = ""
 }
 
 // Allow returns true if the key is available for use (closed, or open with expired cooldown).

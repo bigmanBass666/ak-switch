@@ -813,6 +813,31 @@ func (pr *ProviderRouter) disableKeyHandler(w http.ResponseWriter, r *http.Reque
 	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
+func (pr *ProviderRouter) enableKeyHandler(w http.ResponseWriter, r *http.Request) {
+	ps, errMsg := pr.resolveProvider(r)
+	if ps == nil {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": errMsg})
+		return
+	}
+	if !pr.checkAdminToken(w, r) {
+		return
+	}
+
+	idx, ok := parseKeyIndex(r)
+	if !ok || idx >= len(ps.Pool.Keys()) {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": "key not found"})
+		return
+	}
+
+	if err := ps.Pool.Enable(idx); err != nil {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	ps.Proxy.keyCBs[idx].Reset()
+	ps.State.PersistKeys()
+	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
 func (pr *ProviderRouter) cooldownKeyHandler(w http.ResponseWriter, r *http.Request) {
 	ps, errMsg := pr.resolveProvider(r)
 	if ps == nil {

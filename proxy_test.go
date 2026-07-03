@@ -1015,8 +1015,8 @@ func TestCB_RateLimitRecovery(t *testing.T) {
 	}
 }
 
-// TestCB_QuotaExhausted verifies that repeated 429s escalate to PERMA
-// and return ALL_KEYS_INVALID when all keys are exhausted.
+// TestCB_QuotaExhausted verifies that repeated 429s lead to retry exhaustion
+// (503 EXHAUSTED_RETRIES) rather than permanently disabling the key.
 func TestCB_QuotaExhausted(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -1024,12 +1024,12 @@ func TestCB_QuotaExhausted(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	// 1 key with low BackoffCapSec so it quickly escalates to PERMA
+	// 1 key with low BackoffCapSec and small MaxRetries for fast test
 	cfg := &config.Config{
 		TargetBase:          upstream.URL,
 		GenaiBase:           upstream.URL,
 		Port:                0,
-		MaxRetries:          50,
+		MaxRetries:          3,
 		CooldownSec:         1,
 		BackoffCapSec:       5,
 		BackoffMultiplier:   2,
@@ -1052,7 +1052,7 @@ func TestCB_QuotaExhausted(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	// THEN: return 503 ALL_KEYS_INVALID
+	// THEN: return 503 EXHAUSTED_RETRIES (not ALL_KEYS_INVALID)
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503 Service Unavailable, got %d", resp.StatusCode)
 	}
@@ -1065,8 +1065,8 @@ func TestCB_QuotaExhausted(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("failed to decode JSON error response: %v", err)
 	}
-	if body.Error.Code != "ALL_KEYS_INVALID" {
-		t.Errorf("expected error.code ALL_KEYS_INVALID, got %q", body.Error.Code)
+	if body.Error.Code != "EXHAUSTED_RETRIES" {
+		t.Errorf("expected error.code EXHAUSTED_RETRIES, got %q", body.Error.Code)
 	}
 }
 

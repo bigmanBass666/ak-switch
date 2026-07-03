@@ -169,6 +169,27 @@ func (p *KeyPool) Disable(idx int) error {
 	return nil
 }
 
+// Enable re-enables a previously disabled key by clearing both the disabled
+// flag and any active cooldown. It is safe to call on an already-enabled key.
+// Returns an error if the index is out of range.
+func (p *KeyPool) Enable(idx int) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if idx < 0 || idx >= len(p.keys) {
+		return fmt.Errorf("key index %d out of range (0-%d)", idx, len(p.keys)-1)
+	}
+	p.disabled[idx] = false
+	p.cooldowns[idx] = time.Time{}
+	name := ""
+	if idx >= 0 && idx < len(p.names) {
+		name = p.names[idx]
+	}
+	if name != "" {
+		slog.Info("key enabled", "key_index", idx, "key_name", name)
+	}
+	return nil
+}
+
 // IsDisabled returns whether a key is disabled by index.
 // Returns false if the index is out of range.
 func (p *KeyPool) IsDisabled(idx int) bool {

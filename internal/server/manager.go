@@ -116,6 +116,7 @@ func (pr *ProviderRouter) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/config", pr.configHandler)
 	mux.HandleFunc("/api/keys", pr.keysHandler)
 	mux.HandleFunc("POST /api/keys/{index}/disable", pr.disableKeyHandler)
+	mux.HandleFunc("POST /api/keys/{index}/enable", pr.enableKeyHandler)
 	mux.HandleFunc("PUT /api/keys/{index}/cooldown", pr.cooldownKeyHandler)
 	mux.HandleFunc("DELETE /api/keys/{index}", pr.deleteKeyHandler)
 	mux.HandleFunc("GET /api/stats", pr.statsHandler)
