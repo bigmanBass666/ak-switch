@@ -290,8 +290,11 @@ type TomlProviderConfig struct {
 
 // TomlConfig 对应整个 config.toml 文件结构。
 type TomlConfig struct {
-	Port     int                            `toml:"port,omitempty"`
-	Provider map[string]TomlProviderConfig `toml:"provider"`
+	Port       int                            `toml:"port,omitempty"`
+	LogFile    string                         `toml:"log_file,omitempty"`
+	LogMaxSize int                            `toml:"log_max_size,omitempty"`
+	LogMaxAge  int                            `toml:"log_max_age,omitempty"`
+	Provider   map[string]TomlProviderConfig `toml:"provider"`
 }
 
 // LoadToml 读取 TOML 配置文件并转换为 Config。
@@ -434,6 +437,16 @@ func LoadAllTomlProviders(path string) (map[string]*Config, error) {
 	}
 	for name, p := range tc.Provider {
 		cfg := tomlToConfig(name, &p, port)
+		// Top-level log fields override per-provider log fields
+		if tc.LogFile != "" {
+			cfg.LogFile = tc.LogFile
+		}
+		if tc.LogMaxSize > 0 {
+			cfg.LogMaxSize = tc.LogMaxSize
+		}
+		if tc.LogMaxAge > 0 {
+			cfg.LogMaxAge = tc.LogMaxAge
+		}
 		result[name] = cfg
 	}
 	return result, nil
@@ -498,7 +511,10 @@ func tomlToConfig(name string, tc *TomlProviderConfig, port int) *Config {
 // configToToml 将 *Config 转换为 *TomlConfig（用于写入 TOML 文件）。
 func configToToml(cfg *Config) *TomlConfig {
 	return &TomlConfig{
-		Port: cfg.Port,
+		Port:       cfg.Port,
+		LogFile:    cfg.LogFile,
+		LogMaxSize: cfg.LogMaxSize,
+		LogMaxAge:  cfg.LogMaxAge,
 		Provider: map[string]TomlProviderConfig{
 			"default": {
 				Target:                 cfg.TargetBase,
@@ -514,9 +530,6 @@ func configToToml(cfg *Config) *TomlConfig {
 				BackoffMultiplier:      cfg.BackoffMultiplier,
 				CBResetSec:             cfg.CBResetSec,
 				UpstreamCBThreshold:    cfg.UpstreamCBThreshold,
-				LogFile:                 cfg.LogFile,
-				LogMaxSize:              cfg.LogMaxSize,
-				LogMaxAge:               cfg.LogMaxAge,
 				HealthCheckIntervalSec: cfg.HealthCheckIntervalSec,
 			},
 		},
