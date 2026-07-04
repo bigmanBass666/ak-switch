@@ -1,0 +1,169 @@
+{
+  "data": [
+    {
+      "id": "page-overview",
+      "title": "概览",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1782990800000,
+      "canvasData": {
+        "x": 0,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/overview.html",
+        "interactions": [
+          {
+            "domId": "nav-overview",
+            "targetPageId": "page-overview",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-keys",
+            "targetPageId": "page-keys",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-logs",
+            "targetPageId": "page-logs",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-keys",
+      "title": "Key 管理",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1782990800001,
+      "canvasData": {
+        "x": 620,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/keys.html",
+        "interactions": [
+          {
+            "domId": "nav-overview",
+            "targetPageId": "page-overview",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-keys",
+            "targetPageId": "page-keys",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-logs",
+            "targetPageId": "page-logs",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-logs",
+      "title": "日志",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1782990800002,
+      "canvasData": {
+        "x": 1240,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/logs.html",
+        "interactions": [
+          {
+            "domId": "nav-overview",
+            "targetPageId": "page-overview",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-keys",
+            "targetPageId": "page-keys",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-logs",
+            "targetPageId": "page-logs",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "page-settings",
+      "title": "设置",
+      "type": "page",
+      "version": 1,
+      "createdAt": 1782990800003,
+      "canvasData": {
+        "x": 1860,
+        "y": 0,
+        "group": 0
+      },
+      "devMetadata": {
+        "htmlSrc": "pages/settings.html",
+        "interactions": [
+          {
+            "domId": "nav-overview",
+            "targetPageId": "page-overview",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-keys",
+            "targetPageId": "page-keys",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-logs",
+            "targetPageId": "page-logs",
+            "hideEdge": true
+          },
+          {
+            "domId": "nav-settings",
+            "targetPageId": "page-settings",
+            "hideEdge": true
+          }
+        ]
+      }
+    }
+  ],
+  "config": {
+    "autoLayout": true,
+    "deviceType": "desktop",
+    "projectName": "Alvus Dashboard",
+    "designLibrary": {
+      "id": "dl_builtin_vercel",
+      "name": "Vercel",
+      "version": "",
+      "versionSource": null,
+      "scope": "shared",
+      "path": "c:\\Users\\86150\\.trae-cn\\design_libraries\\dl_builtin_vercel"
+    },
+    "windowSize": {
+      "width": 800,
+      "height": 600
+    }
+  }
+}

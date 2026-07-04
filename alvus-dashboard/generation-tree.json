@@ -1,0 +1,58 @@
+{
+  "root": {
+    "nodeId": "gen-project-shell",
+    "kind": "project-shell",
+    "pageIds": [],
+    "output": "partials/project-shell.html",
+    "sharedRegions": ["sidebar", "topbar", "root frame", "background"],
+    "privateRegions": [],
+    "mutableSlots": ["activeNav", "pageTitle"],
+    "status": "generated",
+    "children": [
+      {
+        "nodeId": "gen-page-overview",
+        "kind": "page-leaf",
+        "pageIds": ["page-overview"],
+        "output": "pages/overview.html",
+        "sharedRegions": [],
+        "privateRegions": ["main content: stats cards, charts, key snapshot table"],
+        "mutableSlots": ["activeNav: overview", "pageTitle: 概览"],
+        "status": "planned",
+        "children": []
+      },
+      {
+        "nodeId": "gen-page-keys",
+        "kind": "page-leaf",
+        "pageIds": ["page-keys"],
+        "output": "pages/keys.html",
+        "sharedRegions": [],
+        "privateRegions": ["main content: key table, add key toolbar, inline actions"],
+        "mutableSlots": ["activeNav: keys", "pageTitle: Key 管理"],
+        "status": "planned",
+        "children": []
+      },
+      {
+        "nodeId": "gen-page-logs",
+        "kind": "page-leaf",
+        "pageIds": ["page-logs"],
+        "output": "pages/logs.html",
+        "sharedRegions": [],
+        "privateRegions": ["main content: log table, search/filter toolbar"],
+        "mutableSlots": ["activeNav: logs", "pageTitle: 日志"],
+        "status": "planned",
+        "children": []
+      },
+      {
+        "nodeId": "gen-page-settings",
+        "kind": "page-leaf",
+        "pageIds": ["page-settings"],
+        "output": "pages/settings.html",
+        "sharedRegions": [],
+        "privateRegions": ["main content: provider config, log level control, key list"],
+        "mutableSlots": ["activeNav: settings", "pageTitle: 设置"],
+        "status": "planned",
+        "children": []
+      }
+    ]
+  }
+}

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置</title>
+    <style id="theme-vars">
+/* @dark-only */
+/* Source: structured-spec */
+
+:root {
+  /* bg */
+  --color-bg: #0a0a0a;
+  --color-surface: #171717;
+  --color-surface-hover: #1f1f1f;
+  --color-muted: #262626;
+  --sidebar-bg: #111111;
+  --topbar-bg: rgba(10, 10, 10, 0.85);
+
+  /* text */
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1a1;
+  --color-text-dim: #737373;
+  --color-text-inverse: #171717;
+
+  /* accent */
+  --color-primary: #e5e5e5;
+  --color-primary-tint-1: #fafafa;
+  --color-primary-bg: rgba(229, 229, 229, 0.08);
+  --active-bg: rgba(229, 229, 229, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.04);
+
+  /* border */
+  --color-border: #282828;
+  --color-border-light: #343434;
+
+  /* status */
+  --color-state-success: #22c55e;
+  --color-state-success-bg: rgba(34, 197, 94, 0.1);
+  --color-state-warning: #f59e0b;
+  --color-state-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-state-error: #ff6467;
+  --color-state-error-bg: rgba(255, 100, 103, 0.1);
+  --color-state-info: #3b82f6;
+  --color-state-info-bg: rgba(59, 130, 246, 0.1);
+
+  /* chart */
+  --chart-grid: #1a1a1e;
+  --chart-1: #91c5ff;
+  --chart-2: #3b82f6;
+  --chart-3: #2563eb;
+  --chart-4: #1d4ed8;
+  --chart-5: #1e3a8a;
+
+  /* scrollbar */
+  --scrollbar-thumb: #343434;
+  --scrollbar-track: transparent;
+
+  /* shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* font */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* layout */
+  --sidebar-width: 220px;
+  --topbar-height: 56px;
+  --content-max-width: 1200px;
+
+  /* ══ Portable Alias Layer ══ */
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-topbar-bg: var(--topbar-bg);
+  --color-active-bg: var(--active-bg);
+  --color-hover-bg: var(--hover-bg);
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-track: var(--scrollbar-track);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --size-sidebar-width: var(--sidebar-width);
+  --size-topbar-height: var(--topbar-height);
+  --size-content-max-width: var(--content-max-width);
+}
+    </style>
+    <style id="component-vars">
+/* ═══════════════════════════════════════════════════════════════
+   components.css — Design System Component Definitions
+   Auto-extracted from preview/component-*.html
+   DO NOT EDIT MANUALLY — regenerate via extract-components-css.mjs
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Button ────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">Primary</span><button class="btn btn-primary">添加</button><button class="btn btn-primary">保存主配置</button><button class="btn btn-primary">新建 Key</button>
+*/
+.btn { display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer; border-radius: var(--radius-md); padding: 8px 16px; font-size: .8rem; font-weight: 500; font-family: var(--font-sans); white-space: nowrap; transition: background .15s, border-color .15s; height: 32px; min-width: 32px; }
+.btn-primary { background: var(--color-primary); color: var(--color-text-inverse); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+.btn-ghost:hover { background: var(--color-hover-bg); }
+.btn-soft-success { background: var(--color-state-success-bg); color: var(--color-state-success); }
+.btn-soft-success:hover { filter: brightness(1.08); }
+.btn-soft-warning { background: var(--color-state-warning-bg); color: var(--color-state-warning); }
+.btn-soft-warning:hover { filter: brightness(1.08); }
+.btn-soft-error { background: var(--color-state-error-bg); color: var(--color-state-error); }
+.btn-soft-error:hover { filter: brightness(1.08); }
+
+/* ── Card ──────────────────────────────────────────────────── */
+/* @anatomy
+   <div class="card" style="flex:1;min-width:280px"> <div class="stat-grid"> <div class="stat-cell"><div class="stat-value">1,284
+*/
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 24px; transition: border-color .12s ease; }
+.card:hover { border-color: var(--color-border-light); }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.stat-cell { display: flex; flex-direction: column; gap: 4px; }
+.stat-value { font-family: var(--font-mono); font-size: 28px; font-weight: 600; color: var(--color-text-primary); line-height: 1; }
+.stat-label { font-size: 11px; font-weight: 500; color: var(--color-text-dim); letter-spacing: .05em; text-transform: uppercase; }
+.card-header { font-size: 14px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px; }
+.chart-area { height: 160px; display: flex; align-items: flex-end; gap: 6px; padding-top: 8px; }
+.chart-bar { flex: 1; background: var(--color-primary-bg); border-radius: var(--radius-sm); min-height: 4px; }
+.chart-bar:nth-child(1) { height: 72px; background: var(--chart-1); }
+.chart-bar:nth-child(2) { height: 104px; background: var(--chart-2); }
+.chart-bar:nth-child(3) { height: 56px; background: var(--chart-3); }
+.chart-bar:nth-child(4) { height: 128px; background: var(--chart-4); }
+.chart-bar:nth-child(5) { height: 92px; background: var(--chart-3); }
+.chart-bar:nth-child(6) { height: 140px; background: var(--chart-2); }
+.chart-bar:nth-child(7) { height: 68px; background: var(--chart-1); }
+
+/* ── Input ─────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">文本输入</span> <input class="inp" type="text" value="sk-proj-xxxxxx">
+*/
+.inp { display:inline-flex; align-items:center; height:40px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); color:var(--color-text-primary); font-size:.85rem; padding:.5rem .75rem; font-family:var(--font-mono); outline:none; width:240px; box-sizing:border-box; transition:border-color .15s; }
+.inp::placeholder { color:var(--color-text-dim); }
+.inp:focus { border-color:var(--color-primary); }
+
+/* ── Navigation ────────────────────────────────────────────── */
+/* @anatomy
+   <div class="sidebar"> <div class="sidebar-header"> <div class="sidebar-logo">Alv<span class="sidebar-logo-em">us</span>
+*/
+.sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; }
+.sidebar-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--color-border); }
+.sidebar-logo { font-size: 1.1rem; font-weight: 700; color: var(--color-text-primary); display: flex; align-items: center; gap: 6px; }
+.sidebar-logo-em { color: var(--color-primary); }
+.nav-list { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; color: var(--color-text-secondary); text-decoration: none; transition: background .15s, color .12s; cursor: pointer; min-width: 0; }
+.nav-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.nav-item.active { background: var(--active-bg); color: var(--color-text-primary); }
+.nav-icon { width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.nav-icon svg { width: 18px; height: 18px; }
+.nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--color-border); font-size: 0.7rem; color: var(--color-text-dim); display: flex; align-items: center; gap: 4px; }
+.state-item { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.state-label { font-size: 0.65rem; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+.state-nav { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; text-decoration: none; width: 120px; cursor: pointer; transition: background .15s; }
+.state-nav.default { color: var(--color-text-secondary); background: transparent; }
+.state-nav.hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.state-nav.active { background: var(--active-bg); color: var(--color-text-primary); }
+.state-nav:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+
+/* ── Select ────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">默认</span> <select class="select"> <option selected>nvidia-main</option> <option>openai-fallback</option> <option>anthropic-claude</option> </select> <select class="select"> <option>全部</option> <option selected>2xx</option> <option>4xx</option> <option>5xx</option> </select> <select class="select"> <option>debug</option> <option selected>info</option> <option>warn</option> <o...
+*/
+.select { height: 36px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-secondary); font-size: .8rem; font-family: var(--font-sans); padding: .4rem 1.5rem .4rem .6rem; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .5rem center; background-size: 16px; min-width: 140px; flex-shrink: 0; transition: border-color .15s; }
+.select:hover { border-color: var(--color-border-light); }
+.select:focus { outline: none; border-color: var(--color-primary); color: var(--color-text-primary); }
+.btn { display: inline-flex; align-items: center; height: 36px; border: none; border-radius: var(--radius-md); background: var(--color-primary); color: var(--color-text-inverse); font-size: .8rem; font-family: var(--font-sans); padding: 0 16px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background .15s; }
+.btn:hover { background: var(--color-primary-tint-1); }
+
+/* ── Table ─────────────────────────────────────────────────── */
+/* @anatomy
+   <div class="specimen"> <div class="story"> <div class="table-wrap"> <table> <thead> <tr><th>#</th><th>Key</th><th>名称</th><th>状态</th><th>RPM</th></tr> </thead> <tbody> <tr><td>01</td><td><span class="key-hash">nvapi-8f3a...c2d1</span></td><td>主 API</td><td><span class="tag tag-ready">Ready</span></td><td>60</td></tr> <tr><td>02</td><td><span class="key-hash">nvapi-a7e2...b4f9</span></td><td>备用 K...
+*/
+.table-wrap { width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow-x: auto; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.table-wrap thead th { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; color: var(--color-text-dim); padding: 12px 16px; text-align: left; white-space: nowrap; font-weight: 500; border-bottom: 1px solid var(--color-border); }
+.table-wrap tbody td { padding: 12px 16px; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border); }
+.table-wrap tbody tr:last-child td { border-bottom: none; }
+.table-wrap tbody tr:hover { background: var(--hover-bg); }
+.key-hash { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-text-secondary); }
+
+/* ── Tag ───────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">状态</span> <span class="tag tag-ready"><span class="tag-dot"></span>Ready</span> <span class="tag tag-cooling"><span class="tag-dot"></span>Cooling</span> <span class="tag tag-disabled"><span class="tag-dot"></span>Disabled</span>
+*/
+.tag { display: inline-flex; align-items: center; gap: .3rem; height: 22px; border-radius: var(--radius-full); padding: 2px 8px; font-size: .7rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; min-width: 22px; }
+.tag-dot { width: 6px; height: 6px; border-radius: var(--radius-full); flex-shrink: 0; }
+.tag-ready { background: var(--color-state-success-bg); color: var(--color-state-success); }
+.tag-ready .tag-dot { background: var(--color-state-success); }
+.tag-cooling { background: var(--color-state-warning-bg); color: var(--color-state-warning); }
+.tag-cooling .tag-dot { background: var(--color-state-warning); }
+.tag-disabled { background: var(--color-state-error-bg); color: var(--color-state-error); }
+.tag-disabled .tag-dot { background: var(--color-state-error); }
+.inline-cell { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--color-muted); border-radius: var(--radius-md); width: 100%; }
+.inline-ctx { font-size: .75rem; color: var(--color-text-secondary); white-space: nowrap; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <style type="text/tailwindcss">
+  
+  @layer base {
+    body { background: var(--color-bg); color: var(--color-text-primary); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+    </style>
+</head>
+<body class="min-h-screen font-sans antialiased">
+  <div class="flex min-h-screen" style="gap:0; padding:0">
+    <!-- Sidebar -->
+    <aside class="sidebar" style="flex-shrink:0; height:100vh">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          Alv<span class="sidebar-logo-em">us</span>
+        </div>
+      </div>
+      <div class="nav-list">
+        <a class="nav-item" data-nav-key="overview" data-dom-id="nav-overview">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg></span>
+          <span class="nav-label">概览</span>
+        </a>
+        <a class="nav-item" data-nav-key="keys" data-dom-id="nav-keys">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg></span>
+          <span class="nav-label">Key 管理</span>
+        </a>
+        <a class="nav-item" data-nav-key="logs" data-dom-id="nav-logs">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+          <span class="nav-label">日志</span>
+        </a>
+        <a class="nav-item active" data-nav-key="settings" data-dom-id="nav-settings">
+          <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+          <span class="nav-label">设置</span>
+        </a>
+      </div>
+      <div class="sidebar-footer">
+        <span><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span>v1.0.0 · 自用</span>
+      </div>
+    </aside>
+    <main class="content" style="display:flex; flex-direction:column; gap:8px;">
+      <!-- Topbar -->
+      <header class="topbar" style="height:var(--topbar-height);background:var(--topbar-bg);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--color-border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;">
+        <div style="font-size:1.1rem; font-weight:600; color:var(--color-text-primary);">设置</div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="display:flex; align-items:center; gap:6px; font-size:0.78rem; font-weight:500; color:var(--color-text-secondary);">
+            <span style="width:7px;height:7px;border-radius:50%;background:var(--color-state-success);display:inline-block;"></span>
+            Running
+          </span>
+          <span class="key-hash" style="font-size:0.75rem;">127.0.0.1:8080</span>
+          <span style="font-size:0.72rem;color:var(--color-text-dim);">HC: 12s ago</span>
+        </div>
+      </div>
+
+      <!-- Content -->
+      <div style="padding:0 24px 24px; display:flex; flex-direction:column; gap:16px;">
+
+        <!-- Block 1: Provider 配置 -->
+        <div class="card">
+          <div class="card-header">Provider 配置</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">Target Base URL</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">https://integrate.api.nvidia.com/v1</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">GenAI Base URL</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">https://ai.api.nvidia.com</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">Cooldown 冷却</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">60s</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">Max Retries</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">3</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">Health Check 间隔</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">30s</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">Upstream CB 阈值</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">5</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">Keys File</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">data/keys.json</div>
+            </div>
+            <div>
+              <div class="key-hash" style="margin-bottom:4px;">日志级别</div>
+              <div style="font-size:0.85rem;color:var(--color-text-primary);font-family:var(--font-mono);">info</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Block 2: 日志级别控制 -->
+        <div class="card">
+          <div class="card-header">日志级别控制</div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span class="tag tag-ready">info</span>
+            <select class="select" style="width:160px;">
+              <option>debug</option>
+              <option selected>info</option>
+              <option>warn</option>
+              <option>error</option>
+            </select>
+            <button class="btn btn-primary">应用</button>
+          </div>
+        </div>
+
+        <!-- Block 3: 已配置的 API Key -->
+        <div class="card">
+          <div class="card-header">已配置的 API Key</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Key</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>01</td>
+                  <td><span class="key-hash">nvapi-8f3a...c2d1</span></td>
+                  <td>主 API</td>
+                  <td><span class="tag tag-ready">Ready</span></td>
+                </tr>
+                <tr>
+                  <td>02</td>
+                  <td><span class="key-hash">nvapi-a7e2...b4f9</span></td>
+                  <td>备用 Key</td>
+                  <td><span class="tag tag-cooling">Cooling</span></td>
+                </tr>
+                <tr>
+                  <td>03</td>
+                  <td><span class="key-hash">nvapi-b3c5...d6e7</span></td>
+                  <td>失效 Key</td>
+                  <td><span class="tag tag-disabled">Disabled</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>

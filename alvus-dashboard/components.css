@@ -1,0 +1,110 @@
+/* ═══════════════════════════════════════════════════════════════
+   components.css — Design System Component Definitions
+   Auto-extracted from preview/component-*.html
+   DO NOT EDIT MANUALLY — regenerate via extract-components-css.mjs
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Button ────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">Primary</span><button class="btn btn-primary">添加</button><button class="btn btn-primary">保存主配置</button><button class="btn btn-primary">新建 Key</button>
+*/
+.btn { display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer; border-radius: var(--radius-md); padding: 8px 16px; font-size: .8rem; font-weight: 500; font-family: var(--font-sans); white-space: nowrap; transition: background .15s, border-color .15s; height: 32px; min-width: 32px; }
+.btn-primary { background: var(--color-primary); color: var(--color-text-inverse); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost { background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+.btn-ghost:hover { background: var(--color-hover-bg); }
+.btn-soft-success { background: var(--color-state-success-bg); color: var(--color-state-success); }
+.btn-soft-success:hover { filter: brightness(1.08); }
+.btn-soft-warning { background: var(--color-state-warning-bg); color: var(--color-state-warning); }
+.btn-soft-warning:hover { filter: brightness(1.08); }
+.btn-soft-error { background: var(--color-state-error-bg); color: var(--color-state-error); }
+.btn-soft-error:hover { filter: brightness(1.08); }
+
+/* ── Card ──────────────────────────────────────────────────── */
+/* @anatomy
+   <div class="card" style="flex:1;min-width:280px"> <div class="stat-grid"> <div class="stat-cell"><div class="stat-value">1,284
+*/
+.card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 24px; transition: border-color .12s ease; }
+.card:hover { border-color: var(--color-border-light); }
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.stat-cell { display: flex; flex-direction: column; gap: 4px; }
+.stat-value { font-family: var(--font-mono); font-size: 28px; font-weight: 600; color: var(--color-text-primary); line-height: 1; }
+.stat-label { font-size: 11px; font-weight: 500; color: var(--color-text-dim); letter-spacing: .05em; text-transform: uppercase; }
+.card-header { font-size: 14px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 20px; }
+.chart-area { height: 160px; display: flex; align-items: flex-end; gap: 6px; padding-top: 8px; }
+.chart-bar { flex: 1; background: var(--color-primary-bg); border-radius: var(--radius-sm); min-height: 4px; }
+.chart-bar:nth-child(1) { height: 72px; background: var(--chart-1); }
+.chart-bar:nth-child(2) { height: 104px; background: var(--chart-2); }
+.chart-bar:nth-child(3) { height: 56px; background: var(--chart-3); }
+.chart-bar:nth-child(4) { height: 128px; background: var(--chart-4); }
+.chart-bar:nth-child(5) { height: 92px; background: var(--chart-3); }
+.chart-bar:nth-child(6) { height: 140px; background: var(--chart-2); }
+.chart-bar:nth-child(7) { height: 68px; background: var(--chart-1); }
+
+/* ── Input ─────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">文本输入</span> <input class="inp" type="text" value="sk-proj-xxxxxx">
+*/
+.inp { display:inline-flex; align-items:center; height:40px; background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); color:var(--color-text-primary); font-size:.85rem; padding:.5rem .75rem; font-family:var(--font-mono); outline:none; width:240px; box-sizing:border-box; transition:border-color .15s; }
+.inp::placeholder { color:var(--color-text-dim); }
+.inp:focus { border-color:var(--color-primary); }
+
+/* ── Navigation ────────────────────────────────────────────── */
+/* @anatomy
+   <div class="sidebar"> <div class="sidebar-header"> <div class="sidebar-logo">Alv<span class="sidebar-logo-em">us</span>
+*/
+.sidebar { width: var(--sidebar-width); background: var(--sidebar-bg); border-right: 1px solid var(--color-border); display: flex; flex-direction: column; border-radius: var(--radius-md); overflow: hidden; }
+.sidebar-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--color-border); }
+.sidebar-logo { font-size: 1.1rem; font-weight: 700; color: var(--color-text-primary); display: flex; align-items: center; gap: 6px; }
+.sidebar-logo-em { color: var(--color-primary); }
+.nav-list { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.nav-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; color: var(--color-text-secondary); text-decoration: none; transition: background .15s, color .12s; cursor: pointer; min-width: 0; }
+.nav-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.nav-item.active { background: var(--active-bg); color: var(--color-text-primary); }
+.nav-icon { width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.nav-icon svg { width: 18px; height: 18px; }
+.nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--color-border); font-size: 0.7rem; color: var(--color-text-dim); display: flex; align-items: center; gap: 4px; }
+.state-item { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.state-label { font-size: 0.65rem; color: var(--color-text-dim); text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+.state-nav { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 500; text-decoration: none; width: 120px; cursor: pointer; transition: background .15s; }
+.state-nav.default { color: var(--color-text-secondary); background: transparent; }
+.state-nav.hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.state-nav.active { background: var(--active-bg); color: var(--color-text-primary); }
+.state-nav:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+
+/* ── Select ────────────────────────────────────────────────── */
+/* @anatomy
+   <span class="label">默认</span> <select class="select"> <option selected>nvidia-main</option> <option>openai-fallback</option> <option>anthropic-claude</option> </select> <select class="select"> <option>全部</option> <option selected>2xx</option> <option>4xx</option> <option>5xx</option> </select> <select class="select"> <option>debug</option> <option selected>info</option> <option>warn</option> <o...
+*/
+.select { height: 36px; background-color: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); color: var(--color-text-secondary); font-size: .8rem; font-family: var(--font-sans); padding: .4rem 1.5rem .4rem .6rem; cursor: pointer; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .5rem center; background-size: 16px; min-width: 140px; flex-shrink: 0; transition: border-color .15s; }
+.select:hover { border-color: var(--color-border-light); }
+.select:focus { outline: none; border-color: var(--color-primary); color: var(--color-text-primary); }
+
+
+/* ── Table ─────────────────────────────────────────────────── */
+/* @anatomy
+   <div class="specimen"> <div class="story"> <div class="table-wrap"> <table> <thead> <tr><th>#</th><th>Key</th><th>名称</th><th>状态</th><th>RPM</th></tr> </thead> <tbody> <tr><td>01</td><td><span class="key-hash">nvapi-8f3a...c2d1</span></td><td>主 API</td><td><span class="tag tag-ready">Ready</span></td><td>60</td></tr> <tr><td>02</td><td><span class="key-hash">nvapi-a7e2...b4f9</span></td><td>备用 K...
+*/
+.table-wrap { width: 100%; border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow-x: auto; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.table-wrap thead th { text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em; color: var(--color-text-dim); padding: 12px 16px; text-align: left; white-space: nowrap; font-weight: 500; border-bottom: 1px solid var(--color-border); }
+.table-wrap tbody td { padding: 12px 16px; color: var(--color-text-primary); border-bottom: 1px solid var(--color-border); }
+.table-wrap tbody tr:last-child td { border-bottom: none; }
+.table-wrap tbody tr:hover { background: var(--hover-bg); }
+.key-hash { font-family: var(--font-mono); font-size: 0.8rem; color: var(--color-text-secondary); }
+
+/* ── Tag (detail — with dot) ───────────────────────────────── */
+/* @anatomy
+   <span class="label">状态</span> <span class="tag tag-ready"><span class="tag-dot"></span>Ready</span> <span class="tag tag-cooling"><span class="tag-dot"></span>Cooling</span> <span class="tag tag-disabled"><span class="tag-dot"></span>Disabled</span>
+*/
+.tag { display: inline-flex; align-items: center; gap: .3rem; height: 22px; border-radius: var(--radius-full); padding: 2px 8px; font-size: .7rem; font-weight: 600; white-space: nowrap; flex-shrink: 0; min-width: 22px; }
+.tag-dot { width: 6px; height: 6px; border-radius: var(--radius-full); flex-shrink: 0; }
+.tag-ready { background: var(--color-state-success-bg); color: var(--color-state-success); }
+.tag-ready .tag-dot { background: var(--color-state-success); }
+.tag-cooling { background: var(--color-state-warning-bg); color: var(--color-state-warning); }
+.tag-cooling .tag-dot { background: var(--color-state-warning); }
+.tag-disabled { background: var(--color-state-error-bg); color: var(--color-state-error); }
+.tag-disabled .tag-dot { background: var(--color-state-error); }
+.inline-cell { display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--color-muted); border-radius: var(--radius-md); width: 100%; }
+.inline-ctx { font-size: .75rem; color: var(--color-text-secondary); white-space: nowrap; }

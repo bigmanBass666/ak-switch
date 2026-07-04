@@ -15,7 +15,16 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+// logLevel is a shared LevelVar used by both stderr and file handlers.
+// ApplyLogLevel sets this value, and both handlers reflect the change automatically.
+var logLevel slog.LevelVar
+
+// fileHandlerWriter is the active lumberjack.Logger for file logging.
+// nil when file logging is not configured.
+var fileHandlerWriter *lumberjack.Logger
 
 // ProxyEngine holds the HTTP client and circuit breakers for upstream proxy requests.
 type ProxyEngine struct {
@@ -164,6 +173,7 @@ func (s *ServerState) PersistKeys() {
 // ApplyLogLevel sets the global slog handler's minimum level based on a string.
 // Supported values: "debug", "info", "warn", "error".
 // Unknown or empty values default to slog.LevelInfo.
+// Updates both the stderr handler and the active file handler (if any).
 func ApplyLogLevel(level string) {
 	var lvl slog.Level
 	switch strings.ToLower(level) {
@@ -178,7 +188,47 @@ func ApplyLogLevel(level string) {
 	default:
 		lvl = slog.LevelInfo
 	}
-	slog.SetDefault(slog.New(newHandler(os.Stderr, lvl)))
+	logLevel.Set(lvl)
+	slog.SetDefault(slog.New(newHandler(os.Stderr, &logLevel)))
+}
+
+// InitFileHandler initializes file-based logging with the given path and rotation settings.
+// If logFile is empty, this is a no-op (file logging remains disabled).
+// It wraps the current default slog handler (stderr) with a multiHandler that also
+// writes to the file. Call this AFTER ApplyLogLevel to preserve level synchronization.
+// The file and stderr handlers share the same logLevel LevelVar.
+func InitFileHandler(logFile string, maxSizeMB, maxAgeDays int) {
+	if logFile == "" {
+		return
+	}
+	// Close any existing file handler first
+	CloseFileHandler()
+
+	lj := &lumberjack.Logger{
+		Filename: logFile,
+		MaxSize:  maxSizeMB,
+		MaxAge:   maxAgeDays,
+		Compress: false,
+	}
+	fileHandlerWriter = lj
+
+	fileHandler := slog.NewTextHandler(lj, &slog.HandlerOptions{Level: &logLevel})
+	currentHandler := slog.Default().Handler()
+
+	// Wrap both into a multiHandler
+	slog.SetDefault(slog.New(&multiHandler{
+		stderr: currentHandler,
+		file:   fileHandler,
+	}))
+	slog.Info("file logging initialized", "path", logFile, "maxSizeMB", maxSizeMB, "maxAgeDays", maxAgeDays)
+}
+
+// CloseFileHandler closes the active file handler writer, if any.
+func CloseFileHandler() {
+	if fileHandlerWriter != nil {
+		_ = fileHandlerWriter.Close()
+		fileHandlerWriter = nil
+	}
 }
 
 // MaskSensitiveData scrubs potential API key patterns from a string for safe debug logging.

@@ -41,6 +41,9 @@ target = "https://api.sensenova.com/v1"
 | `cb_reset_sec` | 否 | `30` | 上游熔断器 OPEN → HALF_OPEN 超时（秒） |
 | `upstream_cb_threshold` | 否 | `5` | 上游熔断器连续失败触发阈值 |
 | `health_check_interval_sec` | 否 | `30` | 主动健康检查间隔（秒） |
+| `log_file` | 否 | `""` | 日志文件路径（空 = 不启用文件日志）。设置后 slog 同时输出到 stderr 和文件 |
+| `log_max_size` | 否 | `100` | 日志文件轮转大小（MB），达到此值自动轮转 |
+| `log_max_age` | 否 | `7` | 日志文件保留天数，超过此期限的轮转文件自动删除 |
 
 ### 自动生成
 

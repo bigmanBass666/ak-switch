@@ -34,7 +34,8 @@ type ColorHandler struct {
 // - If NO_COLOR env var is set → plain TextHandler
 // - If w is a terminal → ColorHandler (ANSI colored)
 // - Otherwise → plain TextHandler
-func newHandler(w io.Writer, lvl slog.Level) slog.Handler {
+// lvl should be a *slog.LevelVar for dynamic level updates, or a fixed slog.Level.
+func newHandler(w io.Writer, lvl slog.Leveler) slog.Handler {
 	// NO_COLOR convention: https://no-color.org/
 	if os.Getenv("NO_COLOR") != "" {
 		return slog.NewTextHandler(w, &slog.HandlerOptions{Level: lvl})
@@ -45,7 +46,7 @@ func newHandler(w io.Writer, lvl slog.Level) slog.Handler {
 		return &ColorHandler{
 			inner:     slog.NewTextHandler(w, &slog.HandlerOptions{Level: lvl, AddSource: true}),
 			writer:    w,
-			addSource: lvl <= slog.LevelDebug, // only show caller in debug
+			addSource: lvl.Level() <= slog.LevelDebug, // only show caller in debug
 		}
 	}
 

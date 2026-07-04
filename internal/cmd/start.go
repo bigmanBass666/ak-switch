@@ -28,6 +28,9 @@ var startCmd = &cobra.Command{
 }
 
 func startServer(dashboardHTML string, providerFilter string) {
+	// ── Crash recovery ─────────────────────────────
+	defer server.CrashRecover("startServer")
+
 	// ── Default host ──────────────────────────────────
 	host := "127.0.0.1"
 
@@ -101,6 +104,11 @@ func startServer(dashboardHTML string, providerFilter string) {
 		}
 	}
 
+	// ── Initialize file logging (from first provider) ──
+	for _, cfg := range providers {
+		server.InitFileHandler(cfg.LogFile, cfg.LogMaxSize, cfg.LogMaxAge)
+		break
+	}
 	// ── Start server ──────────────────────────────────
 	started := len(router.ProviderNames())
 	if started == 0 {
@@ -131,6 +139,9 @@ func startServer(dashboardHTML string, providerFilter string) {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 	slog.Info("shutting down")
+
+	// ── Close file logger ────────────────────────────
+	server.CloseFileHandler()
 
 	// ── Graceful shutdown ─────────────────────────────
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
