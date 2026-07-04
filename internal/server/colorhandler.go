@@ -110,14 +110,25 @@ func (h *ColorHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 
+	// Build suffix (source + attrs) with proper spacing
+	attrsStr := attrs.String()
+	var suffix string
+	switch {
+	case source != "" && attrsStr != "":
+		suffix = source + " " + attrsStr
+	case source != "":
+		suffix = source
+	case attrsStr != "":
+		suffix = attrsStr
+	}
+
 	// Format: time [LEVEL] message source attrs
 	// time is gray, level is colored+bold, source is gray (debug only)
-	fmt.Fprintf(h.writer, "%s%s%s %s%s%s %s%s%s\n",
+	fmt.Fprintf(h.writer, "%s%s%s %s%s%s %s%s\n",
 		colorGray, ts, colorReset,
 		levelColor, levelLabel, colorReset,
 		msg,
-		source,
-		attrs.String(),
+		suffix,
 	)
 
 	return nil

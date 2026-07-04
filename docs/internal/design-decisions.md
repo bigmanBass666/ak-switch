@@ -39,7 +39,18 @@
 - **Key 分配算法好奇** — 原话：*"我对它将每个请求均匀分配到每个 API key 的机制很好奇……这是不是目前的最优解？有没有更好的解法？加了我们这一层 API key 之间的轮转之后，会比直接直连增加多少延迟？"*
   → 结论：研究完成（`.research-temp/`）。当前 round-robin 已是最优解，单 provider 内 Key 间无负载差异。加代理层延迟约 <1ms（本地 loopback）。
 
+- **日志持久化** — 原话：*"崩溃后无法查日志，是否需要持久化？如何与运行时日志共存？"*
+  → 结论：PR #47 已合并。lumberjack 文件日志轮转 + crash.log 崩溃恢复，运行时日志和持久化日志双写共存。
+
+- **PID 预检 + TomlConfig 日志字段修复** — 原话：*（启动时发现日志文件不生成，排查发现 TomlConfig 顶层缺失 LogFile 字段；后来又发现多个实例可同时启动，无防重复保护）*
+  → 结论：PR #49 已合并。TomlConfig 结构体补齐日志字段并传播到各 provider；启动时读取 PID 文件检查进程存活，防止重复运行。
+
+- **TODO.md 取消 git 跟踪** — 原话：*"这到底要如何从根源解决，而不是抑制错误？我不想再编写好一大堆手稿之后，就莫名其妙被 AI 给弄不见了。"*
+  → 结论：PR #50 已合并。将 TODO.md 从 git 跟踪移除（`.gitignore` + `git rm --cached`），纯本地私人笔记，不受任何 git 操作影响。
+
+- **ColorHandler 日志粘合修复** — 原话：*"怎么 provider 之前的字母全部都跟 provider 粘在一起了呀？"*
+  → 结论：直接修复。ColorHandler 的 msg 输出后缺少与 attrs 之间的分隔符，导致 `INFO proxy successprovider=sensenova` 粘合。补上空格后正常。
+
 ### 💬 待讨论（保留在 TODO.md 中）
 
 - **全 Key 熔断错误提示** — 所有 Key 熔断时返回 `"provider 所有 API Key 已熔断"` 的明确错误？
-- **日志持久化** — 崩溃后无法查日志，是否需要持久化？如何与运行时日志共存？
