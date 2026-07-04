@@ -16,13 +16,13 @@
 读取 `config.toml`，初始化 Key 池，启动 HTTP 代理服务。
 
 ```bash
-akswitch start                    # 启动默认 provider（或全部，若未设置 default_provider）
+akswitch start                    # 启动第一个 provider（按名称字母序）
 akswitch start --all              # 启动所有 provider
 akswitch start --provider <name>  # 只启动指定 provider
 ```
 
 - 读取 `config.toml` 中所有 `[provider.*]` 段
-- 默认只启动 `default_provider` 指定的 provider（若未设置则启动全部）
+- 默认启动按名称字母序的第一个 provider（可设 `default_provider` 指定、或 `--all` 启动全部）
 - `--all` 强制启动所有 provider（忽略 `default_provider` 设置）
 - `--provider <name>` 只启动指定 provider（优先级最高）
 - 自动写入 `akswitch.pid` 文件，`akswitch stop` 通过此文件发送中断信号

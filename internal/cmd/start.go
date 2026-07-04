@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -69,15 +71,24 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 
 	port := config.FindServerPort(xdgPath)
 
+	// 四选一：--provider > --all > default_provider > 第一个 provider（字母序）
+	var shouldStart func(name string) bool
+	switch {
+	case providerFilter != "":
+		shouldStart = func(name string) bool { return name == providerFilter }
+	case startAll:
+		shouldStart = func(name string) bool { return true }
+	case config.DefaultProviderName != "":
+		shouldStart = func(name string) bool { return name == config.DefaultProviderName }
+	default:
+		names := slices.Sorted(maps.Keys(providers))
+		first := names[0]
+		slog.Info("default_provider 未配置，默认使用第一个 provider", "provider", first)
+		shouldStart = func(name string) bool { return name == first }
+	}
+
 	for name, cfg := range providers {
-		// Determine if this provider should be started
-		shouldStart := true
-		if providerFilter != "" {
-			shouldStart = (name == providerFilter)
-		} else if !startAll && config.DefaultProviderName != "" {
-			shouldStart = (name == config.DefaultProviderName)
-		}
-		if !shouldStart {
+		if !shouldStart(name) {
 			slog.Debug("skipping provider", "name", name)
 			continue
 		}
@@ -234,6 +245,6 @@ func checkPidFile(pidFile string) (bool, int) {
 }
 
 func init() {
-	startCmd.Flags().Bool("all", false, "Start all providers (default: only default_provider or all if none set)")
+	startCmd.Flags().Bool("all", false, "Start all providers (default: first provider alphabetically, or error if none configured)")
 	rootCmd.AddCommand(startCmd)
 }

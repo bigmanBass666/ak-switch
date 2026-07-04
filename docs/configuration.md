@@ -22,7 +22,7 @@ target = "https://api.sensenova.com/v1"
 | 字段 | 必填 | 默认值 | 说明 |
 |------|------|--------|------|
 | `port` | 否 | `8080` | HTTP 监听端口（所有 provider 共享） |
-| `default_provider` | 否 | `""` | 默认启动的 provider 名称。设置后 `akswitch start` 只启动此 provider；未设置时启动全部 |
+| `default_provider` | 否 | `""` | 默认启动的 provider 名称。设置后 `akswitch start` 只启动此 provider；未设置时自动使用第一个 provider（按名称字母序）|
 
 ### Provider 字段
 

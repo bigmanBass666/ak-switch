@@ -76,7 +76,7 @@ func TestFullE2E_RealUserSimulation(t *testing.T) {
 
 	// ── 4. akswitch start ──────────────────────────────────
 	t.Log("4. akswitch start")
-	server := exec.Command(bin, "start")
+	server := exec.Command(bin, "start", "--all")
 	var serverStderr bytes.Buffer
 	server.Stderr = &serverStderr
 	if err := server.Start(); err != nil {
