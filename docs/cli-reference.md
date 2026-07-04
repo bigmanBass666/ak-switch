@@ -7,6 +7,7 @@
 | 标志 | 说明 |
 |------|------|
 | `--provider` | 只启动指定 provider |
+| `--all` | 启动所有 provider |
 | `--tag` | 进程标识标签 |
 | `--help` | 显示帮助信息 |
 
@@ -15,11 +16,15 @@
 读取 `config.toml`，初始化 Key 池，启动 HTTP 代理服务。
 
 ```bash
-akswitch start [--provider <name>]
+akswitch start                    # 启动默认 provider（或全部，若未设置 default_provider）
+akswitch start --all              # 启动所有 provider
+akswitch start --provider <name>  # 只启动指定 provider
 ```
 
-- 读取 `config.toml` 中所有 `[provider.*]` 段，每段启动一个独立实例
-- `--provider <name>` 只启动指定 provider
+- 读取 `config.toml` 中所有 `[provider.*]` 段
+- 默认只启动 `default_provider` 指定的 provider（若未设置则启动全部）
+- `--all` 强制启动所有 provider（忽略 `default_provider` 设置）
+- `--provider <name>` 只启动指定 provider（优先级最高）
 - 自动写入 `akswitch.pid` 文件，`akswitch stop` 通过此文件发送中断信号
 
 ### 启动顺序
@@ -130,12 +135,17 @@ akswitch status
 输出示例：
 
 ```
-PROVIDER       PORT   HEALTH     ACTIVE KEYS  REQUESTS   UPTIME
-nvidia         3001   UP         3            42         360s
-sensenova      3002   UP         2            18         360s
+Server: http://127.0.0.1:4000
+Status: ok
+PROVIDER       KEYS  CB_STATE
+nvidia         6     closed
+sensenova      6     closed
+Requests: 2588 (success: 2577, failed: 11)
+Active keys: 12, Cooling: 0, Disabled: 0
+Uptime: 32559s
 ```
 
-实例无响应时显示 `DOWN`，不崩溃。
+实例无响应时显示错误信息，不崩溃。
 
 ## `akswitch logs`
 
