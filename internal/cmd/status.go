@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"text/tabwriter"
 	"time"
 
 	"akswitch/internal/config"
@@ -44,7 +46,7 @@ var statusCmd = &cobra.Command{
 			return fmt.Errorf("failed to parse health response: %w", err)
 		}
 
-		fmt.Printf("Server: http://127.0.0.1:%d\n", adminPort)
+		fmt.Printf("Server: http://127.0.0.1:%d\n", port)
 		fmt.Printf("Status: %s\n", healthData["status"])
 
 		if providers, ok := healthData["providers"]; ok {
@@ -53,12 +55,7 @@ var statusCmd = &cobra.Command{
 
 		if details, ok := healthData["details"]; ok {
 			if det, ok2 := details.(map[string]interface{}); ok2 {
-				for name, info := range det {
-					if inf, ok3 := info.(map[string]interface{}); ok3 {
-						fmt.Printf("  %s: keys=%v, cb=%v\n",
-							name, inf["keys"], inf["upstream_cb_state"])
-					}
-				}
+				fmt.Print(formatProviderTable(det))
 			}
 		}
 
@@ -80,4 +77,20 @@ var statusCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// formatProviderTable formats the provider details map as a tab-aligned table.
+// Exported for testing.
+func formatProviderTable(det map[string]interface{}) string {
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "PROVIDER\tKEYS\tCB_STATE")
+	for name, info := range det {
+		if inf, ok3 := info.(map[string]interface{}); ok3 {
+			fmt.Fprintf(w, "%s\t%v\t%v\n",
+				name, inf["keys"], inf["upstream_cb_state"])
+		}
+	}
+	w.Flush()
+	return buf.String()
 }
