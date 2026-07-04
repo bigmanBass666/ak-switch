@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	adminPort    = 8080
-	pidFileName  = "akswitch.pid"
+	adminPort = 8080
 )
+
+var PidFileName = "akswitch.pid"
 
 var dashHTML string
 

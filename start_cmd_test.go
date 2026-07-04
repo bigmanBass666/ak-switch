@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 func TestStartCmd_TOMLMode(t *testing.T) {
 	if os.Getenv("ALVUS_TEST_START_CHILD") == "1" {
 		os.Args = []string{"akswitch", "start"}
+		cmd.PidFileName = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "akswitch.pid")
 		cmd.Execute("")
 		return
 	}
@@ -78,6 +80,7 @@ func TestStartCmd_TOMLMode(t *testing.T) {
 func TestStartCmd_NoKeys(t *testing.T) {
 	if os.Getenv("ALVUS_TEST_START_CHILD") == "1" {
 		os.Args = []string{"akswitch", "start"}
+		cmd.PidFileName = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "akswitch.pid")
 		cmd.Execute("")
 		return
 	}
@@ -120,6 +123,7 @@ func TestStartCmd_NoKeys(t *testing.T) {
 func TestStartCmd_ProviderFilter(t *testing.T) {
 	if os.Getenv("ALVUS_TEST_START_CHILD") == "1" {
 		os.Args = []string{"akswitch", "start", "--provider", "test-a"}
+		cmd.PidFileName = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "akswitch.pid")
 		cmd.Execute("")
 		return
 	}

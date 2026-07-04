@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,6 +34,13 @@ var startCmd = &cobra.Command{
 func startServer(dashboardHTML string, providerFilter string) {
 	// ── Crash recovery ─────────────────────────────
 	defer server.CrashRecover("startServer")
+
+	// ── PID pre-check ───────────────────────────────
+	if running, pid := checkPidFile(PidFileName); running {
+		slog.Error("akswitch is already running", "pid", pid)
+		fmt.Fprintf(os.Stderr, "akswitch is already running (PID %d). Stop it first with 'akswitch stop'.\n", pid)
+		os.Exit(1)
+	}
 
 	// ── Default host ──────────────────────────────────
 	host := "127.0.0.1"
@@ -122,11 +133,11 @@ func startServer(dashboardHTML string, providerFilter string) {
 
 	// ── Write PID file ─────────────────────────────────
 	pidData := []byte(fmt.Sprintf("%d\n", os.Getpid()))
-	if err := os.WriteFile(pidFileName, pidData, 0644); err != nil {
+	if err := os.WriteFile(PidFileName, pidData, 0644); err != nil {
 		slog.Warn("failed to write PID file", "error", err)
 	}
 	defer func() {
-		if err := os.Remove(pidFileName); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(PidFileName); err != nil && !os.IsNotExist(err) {
 			slog.Warn("failed to remove PID file", "error", err)
 		}
 	}()
@@ -180,6 +191,39 @@ func loadKeysForProvider(name string, cfg *config.Config) (keys, names []string)
 	}
 
 	return keys, names
+}
+
+// checkPidFile reads the PID file and checks if the process is still running.
+// Returns (true, pid) if running, (false, 0) otherwise.
+func checkPidFile(pidFile string) (bool, int) {
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		return false, 0
+	}
+
+	pidStr := strings.TrimSpace(string(data))
+	pid, err := strconv.Atoi(pidStr)
+	if err != nil || pid <= 0 {
+		return false, 0
+	}
+
+	if runtime.GOOS == "windows" {
+		// Windows: use tasklist to check process existence
+		cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/NH")
+		out, err := cmd.Output()
+		if err != nil {
+			return false, 0
+		}
+		return strings.Contains(string(out), strconv.Itoa(pid)), pid
+	}
+
+	// Unix: signal 0 checks process existence without sending a signal
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false, 0
+	}
+	defer proc.Release()
+	return proc.Signal(syscall.Signal(0)) == nil, pid
 }
 
 func init() {
