@@ -38,7 +38,7 @@ func Execute(dashboardHTML string) error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().String("provider", "", "Only start the specified provider")
-	rootCmd.PersistentFlags().Bool("all", false, "Start all providers")
+	rootCmd.Flags().String("provider", "", "Only start the specified provider")
+	rootCmd.Flags().Bool("all", false, "Start all providers (default: first provider alphabetically, or error if none configured)")
 	rootCmd.AddCommand(versionCmd)
 }
