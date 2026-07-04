@@ -1,4 +1,4 @@
-﻿// Package config provides centralized configuration management for AK Switch.
+// Package config provides centralized configuration management for AK Switch.
 //
 // It reads from TOML configuration files, validates required fields,
 // and supports runtime diffing for hot-reload scenarios.
@@ -290,12 +290,17 @@ type TomlProviderConfig struct {
 
 // TomlConfig 对应整个 config.toml 文件结构。
 type TomlConfig struct {
-	Port       int                            `toml:"port,omitempty"`
+	Port            int                            `toml:"port,omitempty"`
+	DefaultProvider string                         `toml:"default_provider,omitempty"`
 	LogFile    string                         `toml:"log_file,omitempty"`
 	LogMaxSize int                            `toml:"log_max_size,omitempty"`
 	LogMaxAge  int                            `toml:"log_max_age,omitempty"`
 	Provider   map[string]TomlProviderConfig `toml:"provider"`
 }
+
+// DefaultProviderName 保存从 TOML 配置中读取的默认 provider 名称。
+// 由 LoadAllTomlProviders 设置，被 start 命令用于确定要启动的 provider。
+var DefaultProviderName string
 
 // LoadToml 读取 TOML 配置文件并转换为 Config。
 // 文件必须存在且格式合法；格式错误或缺少 [provider] 段返回 error。
@@ -314,6 +319,7 @@ func LoadToml(path string) (*Config, error) {
 			Message:  fmt.Sprintf("配置错误: TOML 解析失败: %v", err),
 		}
 	}
+	DefaultProviderName = tc.DefaultProvider
 	if len(tc.Provider) == 0 {
 		return nil, &ConfigError{
 			Category: "config",
@@ -426,6 +432,7 @@ func LoadAllTomlProviders(path string) (map[string]*Config, error) {
 			Message:  fmt.Sprintf("配置错误: TOML 解析失败: %v", err),
 		}
 	}
+	DefaultProviderName = tc.DefaultProvider
 	if len(tc.Provider) == 0 {
 		return nil, &ConfigError{
 			Category: "config",
@@ -513,7 +520,8 @@ func tomlToConfig(name string, tc *TomlProviderConfig, port int) *Config {
 // configToToml 将 *Config 转换为 *TomlConfig（用于写入 TOML 文件）。
 func configToToml(cfg *Config) *TomlConfig {
 	return &TomlConfig{
-		Port:       cfg.Port,
+		Port:            cfg.Port,
+		DefaultProvider: DefaultProviderName,
 		LogFile:    cfg.LogFile,
 		LogMaxSize: cfg.LogMaxSize,
 		LogMaxAge:  cfg.LogMaxAge,

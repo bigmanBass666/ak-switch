@@ -27,11 +27,12 @@ var startCmd = &cobra.Command{
 	Long:  "Loads TOML configuration, initializes the key pool, and starts the HTTP proxy server on a single port with path-based provider routing.",
 	Run: func(cmd *cobra.Command, args []string) {
 		providerFilter, _ := cmd.Flags().GetString("provider")
-		startServer(dashHTML, providerFilter)
+		startAll, _ := cmd.Flags().GetBool("all")
+		startServer(dashHTML, providerFilter, startAll)
 	},
 }
 
-func startServer(dashboardHTML string, providerFilter string) {
+func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 	// ── Crash recovery ─────────────────────────────
 	defer server.CrashRecover("startServer")
 
@@ -69,9 +70,15 @@ func startServer(dashboardHTML string, providerFilter string) {
 	port := config.FindServerPort(xdgPath)
 
 	for name, cfg := range providers {
-		// Apply provider filter first
-		if providerFilter != "" && name != providerFilter {
-			slog.Debug("skipping provider (filtered by --provider)", "name", name)
+		// Determine if this provider should be started
+		shouldStart := true
+		if providerFilter != "" {
+			shouldStart = (name == providerFilter)
+		} else if !startAll && config.DefaultProviderName != "" {
+			shouldStart = (name == config.DefaultProviderName)
+		}
+		if !shouldStart {
+			slog.Debug("skipping provider", "name", name)
 			continue
 		}
 
@@ -227,5 +234,6 @@ func checkPidFile(pidFile string) (bool, int) {
 }
 
 func init() {
+	startCmd.Flags().Bool("all", false, "Start all providers (default: only default_provider or all if none set)")
 	rootCmd.AddCommand(startCmd)
 }

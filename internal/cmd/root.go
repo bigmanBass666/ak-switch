@@ -19,7 +19,8 @@ var rootCmd = &cobra.Command{
 	Short: "API Key rotation proxy for AI providers",
 	Run: func(cmd *cobra.Command, args []string) {
 		providerFilter, _ := cmd.Flags().GetString("provider")
-		startServer(dashHTML, providerFilter)
+		startAll, _ := cmd.Flags().GetBool("all")
+		startServer(dashHTML, providerFilter, startAll)
 	},
 }
 
@@ -38,5 +39,6 @@ func Execute(dashboardHTML string) error {
 
 func init() {
 	rootCmd.PersistentFlags().String("provider", "", "Only start the specified provider")
+	rootCmd.PersistentFlags().Bool("all", false, "Start all providers")
 	rootCmd.AddCommand(versionCmd)
 }
