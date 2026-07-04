@@ -135,12 +135,17 @@ akswitch status
 输出示例：
 
 ```
-PROVIDER       PORT   HEALTH     ACTIVE KEYS  REQUESTS   UPTIME
-nvidia         3001   UP         3            42         360s
-sensenova      3002   UP         2            18         360s
+Server: http://127.0.0.1:4000
+Status: ok
+PROVIDER       KEYS  CB_STATE
+nvidia         6     closed
+sensenova      6     closed
+Requests: 2588 (success: 2577, failed: 11)
+Active keys: 12, Cooling: 0, Disabled: 0
+Uptime: 32559s
 ```
 
-实例无响应时显示 `DOWN`，不崩溃。
+实例无响应时显示错误信息，不崩溃。
 
 ## `akswitch logs`
 
