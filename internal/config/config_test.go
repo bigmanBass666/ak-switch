@@ -1,8 +1,9 @@
-package config
+﻿package config
 
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"akswitch/internal/utils"
@@ -633,6 +634,13 @@ func TestXDGConfigPath(t *testing.T) {
 	}
 	if path == "" {
 		t.Error("XDGConfigPath() returned empty path")
+	}
+	if !strings.Contains(path, ".akswitch") {
+		t.Errorf("XDGConfigPath() = %q, want path containing \".akswitch\"", path)
+	}
+	// Should NOT contain AppData, Roaming, or .config
+	if strings.Contains(path, "AppData") || strings.Contains(path, "Roaming") || strings.Contains(path, ".config") {
+		t.Errorf("XDGConfigPath() = %q, should not contain AppData/Roaming/.config", path)
 	}
 }
 
