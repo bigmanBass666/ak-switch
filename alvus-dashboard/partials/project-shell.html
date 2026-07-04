@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alvus Dashboard</title>
+    <style id="theme-vars">
+/* ============================================
+   Alvus Dashboard — Vercel Dark Monochrome Style
+   TOKENS ONLY — layout classes are in layout.css
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* ── Vercel Dark Mode Colors ── */
+  --color-bg: #0a0a0a;
+  --color-surface: #171717;
+  --color-surface-hover: #1f1f1f;
+  --color-muted: #262626;
+  --color-border: #282828;
+  --color-border-light: #343434;
+
+  /* ── Text (monochrome hierarchy) ── */
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1a1;
+  --color-text-dim: #737373;
+  --color-text-inverse: #171717;
+
+  /* ── Primary (monochrome — light neutral on dark) ── */
+  --color-primary: #e5e5e5;
+  --color-primary-tint-1: #fafafa;
+  --color-primary-bg: rgba(229, 229, 229, 0.08);
+
+  /* ── State Colors (Vercel palette) ── */
+  --color-state-success: #22c55e;
+  --color-state-success-bg: rgba(34, 197, 94, 0.1);
+  --color-state-warning: #f59e0b;
+  --color-state-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-state-error: #ff6467;
+  --color-state-error-bg: rgba(255, 100, 103, 0.1);
+  --color-state-info: #3b82f6;
+  --color-state-info-bg: rgba(59, 130, 246, 0.1);
+
+  /* ── Typography (Vercel: Geist stack) ── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── Radius (Vercel: 8px standard) ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* ── Layout ── */
+  --sidebar-width: 220px;
+  --topbar-height: 56px;
+  --content-max-width: 1200px;
+
+  /* ── Shadows (Vercel: nearly silent) ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* ── Misc ── */
+  --sidebar-bg: #111111;
+  --topbar-bg: rgba(10, 10, 10, 0.85);
+  --active-bg: rgba(229, 229, 229, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.04);
+  --scrollbar-thumb: #343434;
+  --scrollbar-track: transparent;
+  --chart-grid: #1a1a1e;
+
+  /* ── Chart Colors (Vercel: blue scale for data viz only) ── */
+  --chart-1: #91c5ff;
+  --chart-2: #3b82f6;
+  --chart-3: #2563eb;
+  --chart-4: #1d4ed8;
+  --chart-5: #1e3a8a;
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-primary: var(--color-primary);
+    --color-muted: var(--color-muted);
+    --color-border: var(--color-border);
+  }
+  @layer base {
+    body { background: var(--color-surface); color: var(--color-text-primary); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+</head>
+<body>
+
+    <style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.3; }
+.h2 { font-size: 1rem; font-weight: 500; letter-spacing: -0.01em; line-height: 1.4; }
+.body { font-size: 0.875rem; line-height: 1.5; }
+.caption { font-size: 0.8rem; color: var(--color-text-secondary); }
+.mono { font-family: var(--font-mono); }
+.sidebar {
+  position: fixed; top: 0; left: 0;
+  width: var(--sidebar-width); height: 100vh;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--color-border);
+  display: flex; flex-direction: column;
+  z-index: 50;
+}
+.sidebar-header {
+  height: var(--topbar-height);
+  display: flex; align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.sidebar-logo { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+.sidebar-logo em { font-style: normal; color: var(--color-text-primary); }
+.sidebar-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 12px; }
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem; font-weight: 500;
+  color: var(--color-text-secondary); cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  text-decoration: none;
+}
+.nav-item:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.nav-item.active { background: var(--active-bg); color: var(--color-text-primary); }
+.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+.sidebar-footer { padding: 12px; border-top: 1px solid var(--color-border); font-size: 0.7rem; color: var(--color-text-dim); }
+.topbar {
+  position: fixed; top: 0; left: var(--sidebar-width); right: 0;
+  height: var(--topbar-height);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 40;
+}
+.topbar-left { display: flex; align-items: center; gap: 8px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-page-title { font-size: 0.9rem; font-weight: 600; letter-spacing: -0.01em; }
+.status-indicator { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 500; }
+.status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.status-dot-ok { background: var(--color-state-success); }
+.status-dot-warn { background: var(--color-state-warning); }
+.status-dot-err { background: var(--color-state-error); }
+.topbar-meta { font-size: 0.72rem; color: var(--color-text-dim); }
+.content {
+  margin-left: var(--sidebar-width);
+  margin-top: var(--topbar-height);
+  padding: 24px;
+  min-height: calc(100vh - var(--topbar-height));
+}
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  transition: border-color 0.12s ease;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.btn-primary { background: var(--color-primary); color: var(--color-text-inverse); }
+.btn-primary:hover { background: var(--color-primary-tint-1); }
+.btn-ghost { background: transparent; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
+.btn-ghost:hover { background: var(--hover-bg); color: var(--color-text-primary); }
+.input {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color 0.12s ease;
+  height: 40px;
+}
+.input:focus { border-color: var(--color-primary); }
+.input::placeholder { color: var(--color-text-dim); }
+.select {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  outline: none;
+  cursor: pointer;
+  height: 36px;
+}
+.select:focus { border-color: var(--color-primary); }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 22px;
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.tag-ready { background: var(--color-state-success-bg); color: var(--color-state-success); }
+.tag-cooling { background: var(--color-state-warning-bg); color: var(--color-state-warning); }
+.tag-disabled { background: var(--color-state-error-bg); color: var(--color-state-error); }
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-dim);
+  margin-top: 4px;
+}
+.table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.table-wrap table { width: 100%; border-collapse: collapse; }
+.table-wrap th {
+  padding: 12px 16px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-dim);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.table-wrap td {
+  padding: 12px 16px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+.table-wrap tr:last-child td { border-bottom: none; }
+.table-wrap tbody tr { transition: background 0.1s ease; }
+.table-wrap tbody tr:hover { background: var(--hover-bg); }
+.section-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+  margin-top: 24px;
+}
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.mb-4 { margin-bottom: 16px; }
+.mb-5 { margin-bottom: 24px; }
+.w-full { width: 100%; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+    </style>
+
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">Alv<em>us</em></div>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item" data-dom-id="nav-overview" data-nav-key="overview">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+          概览
+        </a>
+        <a class="nav-item" data-dom-id="nav-keys" data-nav-key="keys">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+          Key 管理
+        </a>
+        <a class="nav-item" data-dom-id="nav-logs" data-nav-key="logs">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          日志
+        </a>
+        <a class="nav-item" data-dom-id="nav-settings" data-nav-key="settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          设置
+        </a>
+      </nav>
+      <div class="sidebar-footer">v1.0.0 · API Key Proxy</div>
+    </aside>
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="topbar-page-title"><!-- SLOT: pageTitle -->概览</span>
+      </div>
+      <div class="topbar-right">
+        <span class="status-indicator">
+          <span class="status-dot status-dot-ok"></span>
+          <span>Running</span>
+        </span>
+        <span class="topbar-meta">HC: 12s ago</span>
+        <select class="select" style="height:auto;padding:0.25rem 0.5rem;font-size:0.75rem;">
+          <option>5s</option><option>10s</option><option>30s</option><option>Pause</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- SLOT: pageContent -->
+    </main>
+</body>
+</html>

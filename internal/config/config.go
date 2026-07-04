@@ -43,6 +43,10 @@ type Config struct {
 	HealthCheckIntervalSec int    // 健康检查间隔(秒)，默认 30，最小 5
 	HealthCheckPath       string // 健康检查路径，默认 "/health"
 	HealthCheckTimeoutSec int    // 健康检查超时(秒)，默认 5，最小 1
+
+	LogFile    string // 日志文件路径（空 = 不启用文件日志）
+	LogMaxSize int    // 日志文件轮转大小（MB，默认 100）
+	LogMaxAge  int    // 日志文件保留天数（默认 7）
 }
 
 
@@ -76,6 +80,8 @@ func DefaultConfig() *Config {
 		HealthCheckPath:       "/health",
 		HealthCheckTimeoutSec:  5,
 		KeysFile:            "keys.json",
+		LogMaxSize:          100,
+		LogMaxAge:           7,
 	}
 }
 
@@ -158,6 +164,9 @@ var configDiffFields = []fieldDef{
 	{"HEALTH_CHECK_INTERVAL_SEC", func(c, o *Config) bool { return c.HealthCheckIntervalSec == o.HealthCheckIntervalSec }, func(c *Config) string { return strconv.Itoa(c.HealthCheckIntervalSec) }},
 	{"HEALTH_CHECK_PATH", func(c, o *Config) bool { return c.HealthCheckPath == o.HealthCheckPath }, func(c *Config) string { return c.HealthCheckPath }},
 	{"HEALTH_CHECK_TIMEOUT_SEC", func(c, o *Config) bool { return c.HealthCheckTimeoutSec == o.HealthCheckTimeoutSec }, func(c *Config) string { return strconv.Itoa(c.HealthCheckTimeoutSec) }},
+		{"LOG_FILE", func(c, o *Config) bool { return c.LogFile == o.LogFile }, func(c *Config) string { return c.LogFile }},
+		{"LOG_MAX_SIZE", func(c, o *Config) bool { return c.LogMaxSize == o.LogMaxSize }, func(c *Config) string { return strconv.Itoa(c.LogMaxSize) }},
+		{"LOG_MAX_AGE", func(c, o *Config) bool { return c.LogMaxAge == o.LogMaxAge }, func(c *Config) string { return strconv.Itoa(c.LogMaxAge) }},
 }
 
 // Diff returns a list of ConfigChange entries describing what differs
@@ -274,6 +283,9 @@ type TomlProviderConfig struct {
 	CBResetSec             int     `toml:"cb_reset_sec,omitempty"`
 	UpstreamCBThreshold    int     `toml:"upstream_cb_threshold,omitempty"`
 	HealthCheckIntervalSec int     `toml:"health_check_interval_sec,omitempty"`
+		LogFile    string `toml:"log_file,omitempty"`
+		LogMaxSize int    `toml:"log_max_size,omitempty"`
+		LogMaxAge  int    `toml:"log_max_age,omitempty"`
 }
 
 // TomlConfig 对应整个 config.toml 文件结构。
@@ -471,6 +483,15 @@ func tomlToConfig(name string, tc *TomlProviderConfig, port int) *Config {
 	if tc.HealthCheckIntervalSec > 0 {
 		cfg.HealthCheckIntervalSec = tc.HealthCheckIntervalSec
 	}
+	if tc.LogFile != "" {
+		cfg.LogFile = tc.LogFile
+	}
+	if tc.LogMaxSize > 0 {
+		cfg.LogMaxSize = tc.LogMaxSize
+	}
+	if tc.LogMaxAge > 0 {
+		cfg.LogMaxAge = tc.LogMaxAge
+	}
 	return cfg
 }
 
@@ -493,6 +514,9 @@ func configToToml(cfg *Config) *TomlConfig {
 				BackoffMultiplier:      cfg.BackoffMultiplier,
 				CBResetSec:             cfg.CBResetSec,
 				UpstreamCBThreshold:    cfg.UpstreamCBThreshold,
+				LogFile:                 cfg.LogFile,
+				LogMaxSize:              cfg.LogMaxSize,
+				LogMaxAge:               cfg.LogMaxAge,
 				HealthCheckIntervalSec: cfg.HealthCheckIntervalSec,
 			},
 		},

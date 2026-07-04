@@ -411,6 +411,9 @@ func TestTomlProviderConfig_AllFields(t *testing.T) {
 	cb_reset_sec = 60
 	upstream_cb_threshold = 10
 	health_check_interval_sec = 15
+		log_file = "/var/log/akswitch.log"
+		log_max_size = 200
+		log_max_age = 30
 `
 	path := writeTempToml(t, content)
 	cfg, err := LoadToml(path)
@@ -462,6 +465,15 @@ func TestTomlProviderConfig_AllFields(t *testing.T) {
 	}
 	if cfg.HealthCheckIntervalSec != 15 {
 		t.Errorf("HealthCheckIntervalSec = %d, want %d", cfg.HealthCheckIntervalSec, 15)
+	}
+	if cfg.LogFile != "/var/log/akswitch.log" {
+		t.Errorf("LogFile = %q, want %q", cfg.LogFile, "/var/log/akswitch.log")
+	}
+	if cfg.LogMaxSize != 200 {
+		t.Errorf("LogMaxSize = %d, want %d", cfg.LogMaxSize, 200)
+	}
+	if cfg.LogMaxAge != 30 {
+		t.Errorf("LogMaxAge = %d, want %d", cfg.LogMaxAge, 30)
 	}
 }
 
@@ -524,6 +536,15 @@ func TestTomlProviderConfig_DefaultValues(t *testing.T) {
 	if cfg.HealthCheckIntervalSec != 30 {
 		t.Errorf("HealthCheckIntervalSec = %d, want default %d", cfg.HealthCheckIntervalSec, 30)
 	}
+	if cfg.LogFile != "" {
+		t.Errorf("LogFile = %q, want empty (default)", cfg.LogFile)
+	}
+	if cfg.LogMaxSize != 100 {
+		t.Errorf("LogMaxSize = %d, want default 100", cfg.LogMaxSize)
+	}
+	if cfg.LogMaxAge != 7 {
+		t.Errorf("LogMaxAge = %d, want default 7", cfg.LogMaxAge)
+	}
 }
 
 func TestTomlProviderConfig_Roundtrip(t *testing.T) {
@@ -543,6 +564,9 @@ func TestTomlProviderConfig_Roundtrip(t *testing.T) {
 	orig.CBResetSec = 60
 	orig.UpstreamCBThreshold = 10
 	orig.HealthCheckIntervalSec = 15
+	orig.LogFile = "/var/log/akswitch.log"
+	orig.LogMaxSize = 200
+	orig.LogMaxAge = 30
 
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "roundtrip_ext.toml")

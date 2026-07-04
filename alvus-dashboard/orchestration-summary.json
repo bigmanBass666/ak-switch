@@ -1,0 +1,184 @@
+{
+  "project": {
+    "name": "Alvus Dashboard",
+    "operation": "create",
+    "operatingMode": "free-explore",
+    "designRead": "Dashboard management console / DevOps admins / dark precision tool / high density / avoid glossy effects and neon",
+    "designDials": {
+      "layoutVariance": 1,
+      "motionIntensity": 1,
+      "visualDensity": 5
+    },
+    "styleDefinitionBrief": "Vercel-inspired dark precision dashboard: emerald green #10b981 accent, #0a0a0b bg, #111113 surfaces, 1px #1f1f23 borders, Inter + JetBrains Mono, restrained 8px radius, border-led surface layering, high information density",
+    "dashboardMode": true,
+    "styleContinuityAnchors": {
+      "colorSystem": "dark bg #0a0a0b, surface #111113, border #1f1f23, primary emerald #10b981",
+      "shapeSystem": "restrained radius: sm 4px, md 8px, lg 12px",
+      "typographySystem": "Inter sans-serif body, JetBrains Mono for data/code",
+      "spacingSystem": "tight utility spacing, 1rem card padding, 0.75rem table cell padding",
+      "surfaceAndDepth": "border-led cards (1px #1f1f23), no shadow on static surfaces, elevated shadow only for floating layers",
+      "interactionTone": "minimal: border-color transitions on hover, no glow effects"
+    },
+    "sharedProjectShellContract": {
+      "description": "All 4 pages share identical sidebar (220px left), topbar (56px), background, spacing rhythm, type hierarchy, card radius/shadow model",
+      "navigationStructure": "left sidebar with 4 nav items: 概览, Key 管理, 日志, 设置",
+      "topbarContents": "Alvus logo/name, status indicator (OK/Degraded/Error), last health check time, refresh interval control"
+    },
+    "generationTree": {
+      "root": {
+        "nodeId": "gen-project-shell",
+        "kind": "project-shell",
+        "status": "planned",
+        "children": [
+          "gen-page-overview",
+          "gen-page-keys",
+          "gen-page-logs",
+          "gen-page-settings"
+        ]
+      }
+    }
+  },
+  "designSource": {
+    "operatingMode": "library-bound",
+    "libraryIdentity": {
+      "name": "Vercel",
+      "id": "dl_builtin_vercel",
+      "version": "",
+      "versionSource": null,
+      "scope": "shared",
+      "path": "c:\\Users\\86150\\.trae-cn\\design_libraries\\dl_builtin_vercel"
+    },
+    "brandCssPath": "colors_and_type.css"
+  },
+  "pages": [
+    {
+      "nodeId": "page-overview",
+      "title": "概览",
+      "htmlSrc": "pages/overview.html",
+      "pageIndex": 1,
+      "pageType": "information-dense",
+      "visualNorthStar": "打开页面第一眼就知道 Key 池整体健康度",
+      "continuityAnchors": [
+        "sidebar + topbar shared shell",
+        "border-led card surfaces",
+        "JetBrains Mono for all data values",
+        "emerald green primary for interactive elements"
+      ],
+      "componentPlan": [],
+      "imagePlan": [],
+      "chartsRequired": true
+    },
+    {
+      "nodeId": "page-keys",
+      "title": "Key 管理",
+      "htmlSrc": "pages/keys.html",
+      "pageIndex": 2,
+      "pageType": "information-dense",
+      "visualNorthStar": "一眼看清所有 Key 的状态，直接操作不跳转",
+      "continuityAnchors": [
+        "sidebar + topbar shared shell",
+        "border-led card surfaces",
+        "JetBrains Mono for all data values",
+        "emerald green primary for interactive elements"
+      ],
+      "componentPlan": [],
+      "imagePlan": [],
+      "chartsRequired": false
+    },
+    {
+      "nodeId": "page-logs",
+      "title": "日志",
+      "htmlSrc": "pages/logs.html",
+      "pageIndex": 3,
+      "pageType": "information-dense",
+      "visualNorthStar": "实时滚动查看请求日志，状态码颜色一目了然",
+      "continuityAnchors": [
+        "sidebar + topbar shared shell",
+        "border-led card surfaces",
+        "JetBrains Mono for all data values",
+        "emerald green primary for interactive elements"
+      ],
+      "componentPlan": [],
+      "imagePlan": [],
+      "chartsRequired": false
+    },
+    {
+      "nodeId": "page-settings",
+      "title": "设置",
+      "htmlSrc": "pages/settings.html",
+      "pageIndex": 4,
+      "pageType": "information-dense",
+      "visualNorthStar": "集中查看所有配置项，快速调整日志级别",
+      "continuityAnchors": [
+        "sidebar + topbar shared shell",
+        "border-led card surfaces",
+        "JetBrains Mono for all data values",
+        "emerald green primary for interactive elements"
+      ],
+      "componentPlan": [],
+      "imagePlan": [],
+      "chartsRequired": false
+    }
+  ],
+  "assets": [],
+  "wiringPlan": [
+    {
+      "sourcePageId": "page-overview",
+      "entries": [
+        { "targetPageId": "page-keys", "domId": "nav-keys" },
+        { "targetPageId": "page-logs", "domId": "nav-logs" },
+        { "targetPageId": "page-settings", "domId": "nav-settings" }
+      ]
+    },
+    {
+      "sourcePageId": "page-keys",
+      "entries": [
+        { "targetPageId": "page-overview", "domId": "nav-overview" },
+        { "targetPageId": "page-logs", "domId": "nav-logs" },
+        { "targetPageId": "page-settings", "domId": "nav-settings" }
+      ]
+    },
+    {
+      "sourcePageId": "page-logs",
+      "entries": [
+        { "targetPageId": "page-overview", "domId": "nav-overview" },
+        { "targetPageId": "page-keys", "domId": "nav-keys" },
+        { "targetPageId": "page-settings", "domId": "nav-settings" }
+      ]
+    },
+    {
+      "sourcePageId": "page-settings",
+      "entries": [
+        { "targetPageId": "page-overview", "domId": "nav-overview" },
+        { "targetPageId": "page-keys", "domId": "nav-keys" },
+        { "targetPageId": "page-logs", "domId": "nav-logs" }
+      ]
+    }
+  ],
+  "hiddenInteractionPlan": [
+    {
+      "sourcePageId": "page-overview",
+      "entries": [
+        { "targetPageId": "page-overview", "domId": "nav-overview", "reason": "current page self-link" }
+      ]
+    },
+    {
+      "sourcePageId": "page-keys",
+      "entries": [
+        { "targetPageId": "page-keys", "domId": "nav-keys", "reason": "current page self-link" }
+      ]
+    },
+    {
+      "sourcePageId": "page-logs",
+      "entries": [
+        { "targetPageId": "page-logs", "domId": "nav-logs", "reason": "current page self-link" }
+      ]
+    },
+    {
+      "sourcePageId": "page-settings",
+      "entries": [
+        { "targetPageId": "page-settings", "domId": "nav-settings", "reason": "current page self-link" }
+      ]
+    }
+  ]
+}

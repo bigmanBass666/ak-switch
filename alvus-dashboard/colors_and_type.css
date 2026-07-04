@@ -1,0 +1,88 @@
+/* @dark-only */
+/* Source: structured-spec */
+
+:root {
+  /* bg */
+  --color-bg: #0a0a0a;
+  --color-surface: #171717;
+  --color-surface-hover: #1f1f1f;
+  --color-muted: #262626;
+  --sidebar-bg: #111111;
+  --topbar-bg: rgba(10, 10, 10, 0.85);
+
+  /* text */
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1a1;
+  --color-text-dim: #737373;
+  --color-text-inverse: #171717;
+
+  /* accent */
+  --color-primary: #e5e5e5;
+  --color-primary-tint-1: #fafafa;
+  --color-primary-bg: rgba(229, 229, 229, 0.08);
+  --active-bg: rgba(229, 229, 229, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.04);
+
+  /* border */
+  --color-border: #282828;
+  --color-border-light: #343434;
+
+  /* status */
+  --color-state-success: #22c55e;
+  --color-state-success-bg: rgba(34, 197, 94, 0.1);
+  --color-state-warning: #f59e0b;
+  --color-state-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-state-error: #ff6467;
+  --color-state-error-bg: rgba(255, 100, 103, 0.1);
+  --color-state-info: #3b82f6;
+  --color-state-info-bg: rgba(59, 130, 246, 0.1);
+
+  /* chart */
+  --chart-grid: #1a1a1e;
+  --chart-1: #91c5ff;
+  --chart-2: #3b82f6;
+  --chart-3: #2563eb;
+  --chart-4: #1d4ed8;
+  --chart-5: #1e3a8a;
+
+  /* scrollbar */
+  --scrollbar-thumb: #343434;
+  --scrollbar-track: transparent;
+
+  /* shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* font */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* layout */
+  --sidebar-width: 220px;
+  --topbar-height: 56px;
+  --content-max-width: 1200px;
+
+  /* ══ Portable Alias Layer ══ */
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-topbar-bg: var(--topbar-bg);
+  --color-active-bg: var(--active-bg);
+  --color-hover-bg: var(--hover-bg);
+  --color-scrollbar-thumb: var(--scrollbar-thumb);
+  --color-scrollbar-track: var(--scrollbar-track);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --size-sidebar-width: var(--sidebar-width);
+  --size-topbar-height: var(--topbar-height);
+  --size-content-max-width: var(--content-max-width);
+}
