@@ -16,12 +16,14 @@ func init() {
 	providerCmd.AddCommand(providerAddCmd)
 	providerCmd.AddCommand(providerListCmd)
 	providerCmd.AddCommand(providerRemoveCmd)
+	providerCmd.AddCommand(providerDefaultCmd)
 
 	providerAddCmd.Flags().StringP("target", "t", "", "Upstream target URL (required)")
 	providerAddCmd.Flags().IntP("port", "p", 0, "HTTP listen port (required for first provider)")
 	providerAddCmd.Flags().StringP("genai", "g", "", "GenAI base URL (optional)")
 	providerAddCmd.Flags().IntP("cooldown-sec", "c", 60, "Cooldown seconds after rate-limit")
 	providerAddCmd.Flags().IntP("max-retries", "r", 3, "Max retry attempts for upstream")
+	providerAddCmd.Flags().Bool("default", false, "Set this provider as the default")
 }
 
 var providerCmd = &cobra.Command{
@@ -103,12 +105,22 @@ Example:
 			return fmt.Errorf("failed to create config directory %s: %w", dir, err)
 		}
 
+		// If --default flag is set, also mark as default provider
+		if isDefault, _ := cmd.Flags().GetBool("default"); isDefault {
+			tc.DefaultProvider = name
+			config.DefaultProviderName = name
+		}
+
 		// Save
 		if err := config.SaveTomlConfig(tc, source); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("Provider %q added to %s\n", name, source)
+		if tc.DefaultProvider == name {
+			fmt.Printf("Provider %q added to %s (default)\n", name, source)
+		} else {
+			fmt.Printf("Provider %q added to %s\n", name, source)
+		}
 		return nil
 	},
 }
@@ -199,6 +211,45 @@ Example:
 
 		fmt.Printf("Provider %q removed from %s\n", name, source)
 		fmt.Println("Note: the keys file for this provider was not removed (if any)")
+		return nil
+	},
+}
+
+var providerDefaultCmd = &cobra.Command{
+	Use:   "default <name>",
+	Short: "Set the default provider",
+	Long: `Set a provider as the default, which ` + "`" + `akswitch start` + "`" + ` will start
+when no --provider or --all flag is given.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+
+		source, err := config.XDGConfigPath()
+		if err != nil {
+			return fmt.Errorf("failed to determine XDG config path: %w", err)
+		}
+		if _, statErr := os.Stat(source); statErr != nil {
+			return fmt.Errorf("no configuration file found at %s", source)
+		}
+
+		tc, err := config.LoadTomlConfig(source)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		// Verify the provider exists
+		if _, exists := tc.Provider[name]; !exists {
+			return fmt.Errorf("provider %q not found in %s", name, source)
+		}
+
+		tc.DefaultProvider = name
+		config.DefaultProviderName = name
+
+		if err := config.SaveTomlConfig(tc, source); err != nil {
+			return fmt.Errorf("failed to save config: %w", err)
+		}
+
+		fmt.Printf("Default provider set to %q\n", name)
 		return nil
 	},
 }

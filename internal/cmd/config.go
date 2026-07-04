@@ -106,6 +106,9 @@ var configViewCmd = &cobra.Command{
 		sanitized := cfg.Sanitized()
 		fmt.Printf("Configuration source: %s\n", source)
 		fmt.Printf("Port: %d\n", sanitized.Port)
+		if config.DefaultProviderName != "" {
+			fmt.Printf("Default provider: %s\n", config.DefaultProviderName)
+		}
 		fmt.Printf("Target base URL: %s\n", sanitized.TargetBase)
 		fmt.Printf("GenAI base URL: %s\n", sanitized.GenaiBase)
 		if sanitized.AdminToken != "" {
