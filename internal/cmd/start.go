@@ -245,6 +245,7 @@ func checkPidFile(pidFile string) (bool, int) {
 }
 
 func init() {
+	startCmd.Flags().String("provider", "", "Only start the specified provider")
 	startCmd.Flags().Bool("all", false, "Start all providers (default: first provider alphabetically, or error if none configured)")
 	rootCmd.AddCommand(startCmd)
 }
