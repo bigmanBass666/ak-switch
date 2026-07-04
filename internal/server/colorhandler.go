@@ -122,14 +122,17 @@ func (h *ColorHandler) Handle(ctx context.Context, r slog.Record) error {
 		suffix = attrsStr
 	}
 
-	// Format: time [LEVEL] message source attrs
-	// time is gray, level is colored+bold, source is gray (debug only)
-	fmt.Fprintf(h.writer, "%s%s%s %s%s%s %s%s\n",
+	// Build output line with proper spacing between msg and suffix
+	line := fmt.Sprintf("%s%s%s %s%s%s %s",
 		colorGray, ts, colorReset,
 		levelColor, levelLabel, colorReset,
 		msg,
-		suffix,
 	)
+	if suffix != "" {
+		line += " " + suffix
+	}
+	line += "\n"
+	fmt.Fprint(h.writer, line)
 
 	return nil
 }
