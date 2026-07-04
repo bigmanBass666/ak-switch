@@ -23,6 +23,9 @@ akswitch_proxy.exe
 # Runtime PID file
 /akswitch.pid
 
+# TODO.md — 私人笔记，不跟踪
+/TODO.md
+
 # Load test results (binary reports, keep .gitkeep)
 test/load/results/*.bin
 test/load/results/*.html
