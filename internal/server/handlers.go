@@ -172,7 +172,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 
 	for attempt := 0; attempt < cfg.MaxRetries; attempt++ {
 		if !upCB.Allow() {
-			slog.Warn("upstream circuit breaker open, backing off", "provider", ps.Name, "attempt", attempt+1, "max", cfg.MaxRetries)
+			slog.Warn("upstream circuit breaker open, backing off", "provider", ps.Name, "retry", attempt, "max", cfg.MaxRetries)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -181,12 +181,12 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		if !ok {
 			wait := pool.TimeUntilAvailable()
 			if wait < 0 {
-				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
 				pr.recordProxyMetrics(r.Method, "5xx", "", start)
 				return
 			}
 			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
-			slog.Warn("all keys cooling", "provider", ps.Name, "wait", (wait+jitter).Round(time.Second), "attempt", attempt+1, "max", cfg.MaxRetries)
+			slog.Warn("all keys cooling", "provider", ps.Name, "wait", (wait+jitter).Round(time.Second), "retry", attempt, "max", cfg.MaxRetries)
 			time.Sleep(wait + jitter)
 			continue
 		}
@@ -204,7 +204,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 					}
 				}
 				if allPerma {
-					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
 					pr.recordProxyMetrics(r.Method, "5xx", "", start)
 					return
 				}
@@ -276,7 +276,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 	}
 
 	// Retry exhausted
-	writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, "exhausted all retries")
+	writeProxyError(w, http.StatusServiceUnavailable, ErrorExhaustedRetries, fmt.Sprintf("%s 重试已耗尽，所有 Key 无响应", ps.Name))
 	pr.logs.Append(utils.LogEntry{
 		Timestamp:       time.Now().Format(time.RFC3339),
 		Key:             lastKey,
@@ -287,7 +287,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		Status:          http.StatusServiceUnavailable,
 		RequestBodySize: len(bodyBytes),
 		DurationMs:      time.Since(start).Milliseconds(),
-		Attempt:         cfg.MaxRetries,
+		Retries:         cfg.MaxRetries,
 		Provider:        ps.Name,
 	})
 	slog.Debug("proxy response debug", "status", 503, "duration_ms", time.Since(start).Seconds()*1000, "retries", cfg.MaxRetries)
@@ -314,14 +314,14 @@ func (pr *ProviderRouter) handleRateLimited(w http.ResponseWriter, ps *ProviderS
 		}
 	}
 	pool.Cooldown(idx, cooldown)
-	slog.Warn("key rate limited", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_attempt", keyCBs[idx].Attempt(), "body_preview", string(body))
+	slog.Warn("key rate limited", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_retry", keyCBs[idx].Attempt(), "body_preview", string(body))
 	pr.metrics.UpstreamErrors.WithLabelValues("rate_limited").Inc()
 
 	if keyCBs[idx].State() == circuitbreaker.StatePermanent {
 		slog.Warn("key quota exhausted, disabling permanently", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx))
 		pool.Disable(idx)
 		if pool.ActiveCount() == 0 {
-			writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys quota exhausted")
+			writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
 			pr.recordProxyMetrics(method, "5xx", "", start)
 			return true
 		}
@@ -343,7 +343,7 @@ func (pr *ProviderRouter) handleAuthRejected(w http.ResponseWriter, ps *Provider
 	pool.Disable(idx)
 	keyCBs[idx].RecordPerma("auth_rejected")
 	if pool.ActiveCount() == 0 {
-		writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, "all keys are invalid or revoked")
+		writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 Key 已失效或吊销", ps.Name))
 		pr.recordProxyMetrics(method, "5xx", "", start)
 		return true
 	}
@@ -368,7 +368,7 @@ func (pr *ProviderRouter) handleNonRetryable(w http.ResponseWriter, ps *Provider
 	io.Copy(w, resp.Body)
 	resp.Body.Close()
 
-	pr.logs.Append(buildLogEntry(ps, key, idx, method, target, resp.StatusCode, len(bodyBytes), start, attempt+1))
+	pr.logs.Append(buildLogEntry(ps, key, idx, method, target, resp.StatusCode, len(bodyBytes), start, attempt))
 	slog.Warn("non-retryable client error", "provider", ps.Name, "method", method, "url", target, "status", resp.StatusCode)
 	slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
 	pr.recordProxyMetrics(method, "4xx", fmt.Sprintf("%d", idx), start)
@@ -390,8 +390,8 @@ func (pr *ProviderRouter) handleSuccess(w http.ResponseWriter, ps *ProviderState
 	streamResponse(w, resp)
 
 	pool.IncrementRequestCount(idx)
-	pr.logs.Append(buildLogEntry(ps, key, idx, method, target, resp.StatusCode, len(bodyBytes), start, attempt+1))
-	slog.Info("proxy success", "provider", ps.Name, "method", method, "url", target, "status", resp.StatusCode, "key_index", idx, "key_name", pool.Name(idx), "attempt", attempt+1)
+	pr.logs.Append(buildLogEntry(ps, key, idx, method, target, resp.StatusCode, len(bodyBytes), start, attempt))
+	slog.Info("proxy success", "provider", ps.Name, "method", method, "url", target, "status", resp.StatusCode, "key_index", idx, "key_name", pool.Name(idx), "retry", attempt)
 	slog.Debug("proxy response debug", "status", resp.StatusCode, "duration_ms", time.Since(start).Seconds()*1000, "retries", attempt+1)
 	pr.recordProxyMetrics(method, akswitchmetrics.StatusLabel(resp.StatusCode), fmt.Sprintf("%d", idx), start)
 }
@@ -410,7 +410,7 @@ func buildLogEntry(ps *ProviderState, key string, idx int, method, target string
 		Status:          status,
 		RequestBodySize: bodySize,
 		DurationMs:      time.Since(start).Milliseconds(),
-		Attempt:         attempt,
+		Retries:         attempt,
 		Provider:        ps.Name,
 	}
 }

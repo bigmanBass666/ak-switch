@@ -63,13 +63,11 @@ var logsCmd = &cobra.Command{
 
 			provider := getStrField(entryMap, "provider", "")
 			duration := getStrField(entryMap, "duration_ms", "")
-			attempt := getStrField(entryMap, "attempt", "")
+			retry := getStrField(entryMap, "retry", "")
 			keyName := getStrField(entryMap, "key_name", "")
 
 			var extras []string
-			if attempt != "" {
-				extras = append(extras, "attempt "+attempt)
-			}
+			if retry != "" && retry != "0" { extras = append(extras, "retry "+retry) }
 			if duration != "" {
 				extras = append(extras, duration+"ms")
 			}

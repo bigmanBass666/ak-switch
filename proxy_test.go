@@ -1828,7 +1828,7 @@ func TestLogEntry_HasNewFields(t *testing.T) {
 	}
 
 	entry := entries[0]
-	for _, field := range []string{"provider", "duration_ms", "attempt", "key_name"} {
+	for _, field := range []string{"provider", "duration_ms", "retry", "key_name"} {
 		if _, ok := entry[field]; !ok {
 			t.Errorf("log entry missing %q field", field)
 		}
@@ -1837,8 +1837,8 @@ func TestLogEntry_HasNewFields(t *testing.T) {
 	if p, ok := entry["provider"].(string); !ok || p != "test" {
 		t.Errorf("expected provider=\"test\", got %v", entry["provider"])
 	}
-	if a, ok := entry["attempt"].(float64); !ok || a < 1 {
-		t.Errorf("expected attempt >= 1, got %v", entry["attempt"])
+	if a, ok := entry["retry"].(float64); !ok || a < 0 {
+		t.Errorf("expected retry >= 0, got %v", entry["retry"])
 	}
 	if d, ok := entry["duration_ms"].(float64); !ok || d < 0 {
 		t.Errorf("expected duration_ms >= 0, got %v", entry["duration_ms"])
@@ -1884,7 +1884,7 @@ func TestLogEntry_ExhaustionHas503(t *testing.T) {
 			continue
 		}
 		found503 = true
-		for _, field := range []string{"provider", "duration_ms", "attempt", "key_name"} {
+		for _, field := range []string{"provider", "duration_ms", "retry", "key_name"} {
 			if _, ok := entry[field]; !ok {
 				t.Errorf("503 log entry missing %q field", field)
 			}
@@ -1892,8 +1892,8 @@ func TestLogEntry_ExhaustionHas503(t *testing.T) {
 		if p, ok := entry["provider"].(string); !ok || p != "test" {
 			t.Errorf("expected provider=\"test\", got %v", entry["provider"])
 		}
-		if a, ok := entry["attempt"].(float64); !ok || a < 2 {
-			t.Errorf("expected attempt >= 2 (MaxRetries), got %v", entry["attempt"])
+		if a, ok := entry["retry"].(float64); !ok || a < 2 {
+			t.Errorf("expected retry >= 2 (MaxRetries), got %v", entry["retry"])
 		}
 		break
 	}
@@ -1936,12 +1936,12 @@ func TestLogEntry_CLIFormat(t *testing.T) {
 
 	entry := entries[0]
 	// All fields the CLI display code in internal/cmd/logs.go reads
-	for _, field := range []string{"method", "url", "status", "timestamp", "provider", "duration_ms", "attempt", "key_name"} {
+	for _, field := range []string{"method", "url", "status", "timestamp", "provider", "duration_ms", "retry", "key_name"} {
 		if _, ok := entry[field]; !ok {
 			t.Errorf("CLI display needs field %q, but log entry missing it", field)
 		}
 	}
 
-	t.Logf("CLI-ready log entry: provider=%v duration_ms=%v attempt=%v key_name=%v",
-		entry["provider"], entry["duration_ms"], entry["attempt"], entry["key_name"])
+	t.Logf("CLI-ready log entry: provider=%v duration_ms=%v retry=%v key_name=%v",
+		entry["provider"], entry["duration_ms"], entry["retry"], entry["key_name"])
 }
