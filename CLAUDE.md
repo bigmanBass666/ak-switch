@@ -8,20 +8,7 @@
 
 - main 分支受保护，禁止直接推送。(main 分支需保持完全健康状态与随时可运行的状态)
 - 执行一切改动前需思考是否需要新建分支.
-- 务必遵循 GitHub Flow
-
-### 分支与 PR 清理（防止堆积）
-
-**原则：** 分支和 worktree 残留不是一次性能解决的，需要在流程中自然收尾。
-
-- **合并 PR 后立即删除分支**：`git push origin --delete <branch>` + `git branch -d <branch>`
-- **子代理使用 worktree 后必须清理**：用完马上 `git worktree remove <path> --force && git branch -D worktree-*`
-- **定期运行清理脚本**：`bash scripts/clean-branches.sh`（保留 main / 当前分支 / 有 open PR 的分支）
-- 不要手工积攒等"大扫除"，而是每次改动结束时顺手清理自己的垃圾
-
-### Go 文件修改纪律
-
-**Edit 首次失败后禁止重试** → Read 全文件 → Write 完整修正版。不改纯读，读完再写。不玩字节手术。
+- 务必遵循 GitHub Flow, 提交PR之后,必须在前台等CI的结果.
 
 ## 测试设计规范
 
