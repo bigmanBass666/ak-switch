@@ -100,6 +100,7 @@ Example:
 		}
 
 		fmt.Printf("Key added to provider %q (total: %d keys)\n", provider, len(store.Keys))
+		triggerReload()
 		return nil
 	},
 }
@@ -204,6 +205,7 @@ Example:
 		}
 		fmt.Printf("Removed key [%d] %s from provider %q (remaining: %d keys)\n",
 			idx, desc, provider, len(store.Keys))
+		triggerReload()
 		return nil
 	},
 }
@@ -257,6 +259,7 @@ Example:
 			desc += fmt.Sprintf(" (name: %s)", store.Keys[idx].Name)
 		}
 		fmt.Printf("Disabled key [%d] %s for provider %q\n", idx, desc, provider)
+		triggerReload()
 		return nil
 	},
 }

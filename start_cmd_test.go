@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"akswitch/internal/cmd"
+	"akswitch/internal/config"
 )
 
 // ── Test: akswitch start (TOML 模式，完整启动) ─────────────────
@@ -23,14 +24,15 @@ import (
 func TestStartCmd_TOMLMode(t *testing.T) {
 	if os.Getenv("ALVUS_TEST_START_CHILD") == "1" {
 		os.Args = []string{"akswitch", "start"}
-		cmd.PidFileName = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "akswitch.pid")
+		cmd.PidFileName = filepath.Join(os.Getenv("AKSWITCH_CONFIG_DIR"), "akswitch.pid")
 		cmd.Execute("")
 		return
 	}
 
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	runCommand(t, "akswitch", "provider", "add", "testp",
 		"--target", "http://localhost:18999/v1",
@@ -47,7 +49,7 @@ func TestStartCmd_TOMLMode(t *testing.T) {
 	cmd := exec.Command(testExe, "-test.run=^TestStartCmd_TOMLMode$")
 	cmd.Env = append(os.Environ(),
 		"ALVUS_TEST_START_CHILD=1",
-		"XDG_CONFIG_HOME="+tmpDir,
+		"AKSWITCH_CONFIG_DIR="+tmpDir,
 	)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -80,14 +82,15 @@ func TestStartCmd_TOMLMode(t *testing.T) {
 func TestStartCmd_NoKeys(t *testing.T) {
 	if os.Getenv("ALVUS_TEST_START_CHILD") == "1" {
 		os.Args = []string{"akswitch", "start"}
-		cmd.PidFileName = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "akswitch.pid")
+		cmd.PidFileName = filepath.Join(os.Getenv("AKSWITCH_CONFIG_DIR"), "akswitch.pid")
 		cmd.Execute("")
 		return
 	}
 
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	runCommand(t, "akswitch", "provider", "add", "nokey",
 		"--target", "http://localhost:18999/v1",
@@ -104,7 +107,7 @@ func TestStartCmd_NoKeys(t *testing.T) {
 	cmd := exec.Command(testExe, "-test.run=^TestStartCmd_NoKeys$")
 	cmd.Env = append(os.Environ(),
 		"ALVUS_TEST_START_CHILD=1",
-		"XDG_CONFIG_HOME="+tmpDir,
+		"AKSWITCH_CONFIG_DIR="+tmpDir,
 	)
 	out, err := cmd.CombinedOutput()
 	output := string(out)
@@ -123,14 +126,15 @@ func TestStartCmd_NoKeys(t *testing.T) {
 func TestStartCmd_ProviderFilter(t *testing.T) {
 	if os.Getenv("ALVUS_TEST_START_CHILD") == "1" {
 		os.Args = []string{"akswitch", "start", "--provider", "test-a"}
-		cmd.PidFileName = filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "akswitch.pid")
+		cmd.PidFileName = filepath.Join(os.Getenv("AKSWITCH_CONFIG_DIR"), "akswitch.pid")
 		cmd.Execute("")
 		return
 	}
 
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	runCommand(t, "akswitch", "provider", "add", "test-a",
 		"--target", "http://localhost:18999/v1",
@@ -154,7 +158,7 @@ func TestStartCmd_ProviderFilter(t *testing.T) {
 	cmd := exec.Command(testExe, "-test.run=^TestStartCmd_ProviderFilter$")
 	cmd.Env = append(os.Environ(),
 		"ALVUS_TEST_START_CHILD=1",
-		"XDG_CONFIG_HOME="+tmpDir,
+		"AKSWITCH_CONFIG_DIR="+tmpDir,
 	)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

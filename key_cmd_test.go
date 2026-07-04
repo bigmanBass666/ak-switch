@@ -19,7 +19,8 @@ import (
 func TestKeyAdd_AddsKey(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	// Init config and add a provider
 	xdgPath, err := config.XDGConfigPath()
@@ -55,7 +56,8 @@ func TestKeyAdd_AddsKey(t *testing.T) {
 func TestKeyList_ShowsKeys(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
@@ -100,7 +102,8 @@ func TestKeyList_ShowsKeys(t *testing.T) {
 func TestKeyRemove_RemovesKey(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
@@ -137,7 +140,8 @@ func TestKeyRemove_RemovesKey(t *testing.T) {
 func TestKeyDisable_DisablesKey(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
@@ -173,7 +177,8 @@ func TestKeyDisable_DisablesKey(t *testing.T) {
 func TestKeyRemove_InvalidIndex(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {

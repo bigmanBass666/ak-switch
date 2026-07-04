@@ -60,7 +60,8 @@ func TestConfigInit_CreatesFile(t *testing.T) {
 func TestConfigView_ShowsConfig(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {

@@ -373,7 +373,16 @@ func SaveTomlConfig(tc *TomlConfig, path string) error {
 }
 
 // XDGConfigPath 返回 ~/.akswitch/config.toml 配置路径。
+// 可通过 ConfigDir 变量（Go 层面）或 AKSWITCH_CONFIG_DIR 环境变量覆盖。
+var ConfigDir string
+
 func XDGConfigPath() (string, error) {
+	if ConfigDir != "" {
+		return filepath.Join(ConfigDir, "config.toml"), nil
+	}
+	if configDir := os.Getenv("AKSWITCH_CONFIG_DIR"); configDir != "" {
+		return filepath.Join(configDir, "config.toml"), nil
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("获取用户家目录失败: %w", err)

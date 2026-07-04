@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -763,6 +764,13 @@ func (pr *ProviderRouter) reloadHandler(w http.ResponseWriter, r *http.Request) 
 	defer pr.mu.Unlock()
 
 	for name, cfg := range providers {
+		// Load keys from configured keys file or standard encrypted store
+		keys, keyNames := loadKeysFromConfig(name, cfg)
+		if len(keys) > 0 {
+			cfg.Keys = keys
+			cfg.KeyNames = keyNames
+		}
+
 		if existing, ok := pr.providers[name]; ok {
 			// Update existing provider
 			existing.Config = cfg
@@ -787,6 +795,31 @@ func (pr *ProviderRouter) reloadHandler(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("config reloaded", "providers", len(pr.providers))
 	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+// loadKeysFromConfig loads API keys for a provider from the configured keys file
+// or the standard encrypted store. Returns nil if no keys can be loaded.
+func loadKeysFromConfig(name string, cfg *config.Config) (keys, names []string) {
+	// If a custom keys file is configured, load from it
+	if cfg.KeysFile != "" {
+		fileKeys, fileNames, err := keypool.LoadKeysFromFile(cfg.KeysFile)
+		if err == nil && fileKeys != nil {
+			return fileKeys, fileNames
+		}
+	}
+
+	// Fallback: try the standard encrypted store path: <XDG>/keys/<name>.enc
+	xdgPath, err := config.XDGConfigPath()
+	if err != nil {
+		return nil, nil
+	}
+	keyFile := filepath.Join(filepath.Dir(xdgPath), "keys", name+".enc")
+	fileKeys, fileNames, err := keypool.LoadKeysFromFile(keyFile)
+	if err == nil && fileKeys != nil {
+		return fileKeys, fileNames
+	}
+
+	return nil, nil
 }
 
 func (pr *ProviderRouter) disableKeyHandler(w http.ResponseWriter, r *http.Request) {

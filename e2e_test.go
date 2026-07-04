@@ -40,7 +40,7 @@ func TestFullE2E_RealUserSimulation(t *testing.T) {
 
 	// ── Fresh environment ────────────────────────────────
 	xdgHome := filepath.Join(t.TempDir(), "config")
-	t.Setenv("XDG_CONFIG_HOME", xdgHome)
+	t.Setenv("AKSWITCH_CONFIG_DIR", xdgHome)
 
 	// ── Mock upstream server ─────────────────────────────
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

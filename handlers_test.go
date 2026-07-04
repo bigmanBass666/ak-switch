@@ -764,7 +764,8 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 
 func TestReloadHandler(t *testing.T) {
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	// Write a valid config.toml at the XDG path for reload to read
 	xdgPath, err := config.XDGConfigPath()

@@ -19,7 +19,8 @@ import (
 func TestProviderAdd_CreatesProviderEntry(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	// provider add auto-creates config.toml when it doesn't exist
 	xdgPath, err := config.XDGConfigPath()
@@ -68,7 +69,8 @@ func TestProviderAdd_CreatesProviderEntry(t *testing.T) {
 func TestProviderAdd_DuplicateRejected(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
@@ -100,7 +102,8 @@ func TestProviderAdd_DuplicateRejected(t *testing.T) {
 func TestProviderList_ShowsProviders(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
@@ -151,7 +154,8 @@ func TestProviderList_ShowsProviders(t *testing.T) {
 func TestProviderRemove_RemovesEntry(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
@@ -181,7 +185,8 @@ func TestProviderRemove_RemovesEntry(t *testing.T) {
 func TestProviderRemove_NotFound(t *testing.T) {
 	resetConfigEnv()
 	tmpDir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	config.ConfigDir = tmpDir
+t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
