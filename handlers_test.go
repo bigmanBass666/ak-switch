@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -33,7 +35,7 @@ func newTestServer(keys []string) *httptest.Server {
 // ── Health ─────────────────────────────────────────
 
 func TestHealthHandler(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/health")
@@ -75,7 +77,7 @@ func TestHealthHandler(t *testing.T) {
 // ── Config GET ─────────────────────────────────────
 
 func TestConfigGet(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/api/config")
@@ -130,7 +132,7 @@ func TestConfigGet(t *testing.T) {
 // ── Config POST ────────────────────────────────────
 
 func TestConfigPost(t *testing.T) {
-		// ConfigPost 会写 .env 并调用 reloadConfig，需要隔离到临时目录
+	// ConfigPost 会写 .env 并调用 reloadConfig，需要隔离到临时目录
 	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +180,7 @@ func TestConfigPost(t *testing.T) {
 // ── Keys GET ───────────────────────────────────────
 
 func TestKeysGet(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/api/keys")
@@ -220,7 +222,7 @@ func TestKeysGet(t *testing.T) {
 // ── Keys POST ──────────────────────────────────────
 
 func TestKeysPost(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	// POST 添加新 key
@@ -270,7 +272,7 @@ func TestKeysPost(t *testing.T) {
 // ── Keys DELETE ────────────────────────────────────
 
 func TestKeysDelete(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	// 先 GET 确认当前 key 数
@@ -330,7 +332,7 @@ func TestKeysDelete(t *testing.T) {
 // ── Clear ──────────────────────────────────────────
 
 func TestClearHandler(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/clear", "application/json", strings.NewReader(`{}`))
@@ -356,7 +358,7 @@ func TestClearHandler(t *testing.T) {
 // ── Health with AdminToken auth ──────────────────────
 
 func TestHealthHandlerAuth(t *testing.T) {
-		cfg := &config.Config{
+	cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -416,7 +418,7 @@ func TestHealthHandlerAuth(t *testing.T) {
 // ── Clear with AdminToken auth ───────────────────────
 
 func TestClearHandlerAuth(t *testing.T) {
-		cfg := &config.Config{
+	cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -478,7 +480,7 @@ func TestClearHandlerAuth(t *testing.T) {
 // ── Stats GET ───────────────────────────────────────
 
 func TestStatsHandler(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/api/stats")
@@ -507,7 +509,7 @@ func TestStatsHandler(t *testing.T) {
 // ── Disable Key POST ──────────────────────────────────
 
 func TestDisableKeyHandler(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	// 禁用 index=1
@@ -562,7 +564,7 @@ func TestDisableKeyHandler(t *testing.T) {
 }
 
 func TestDisableKeyHandlerAuth(t *testing.T) {
-		cfg := &config.Config{
+	cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -624,7 +626,7 @@ func TestDisableKeyHandlerAuth(t *testing.T) {
 // ── Cooldown Key PUT ──────────────────────────────────
 
 func TestCooldownKeyHandler(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	// 冷却 index=1
@@ -662,7 +664,7 @@ func TestCooldownKeyHandler(t *testing.T) {
 // ── Delete Key by Index ───────────────────────────────
 
 func TestDeleteKeyByIndexHandler(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	// 删除 index=1
@@ -713,7 +715,7 @@ func TestDeleteKeyByIndexHandler(t *testing.T) {
 }
 
 func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
-		cfg := &config.Config{
+	cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -765,7 +767,7 @@ func TestDeleteKeyByIndexHandlerAuth(t *testing.T) {
 func TestReloadHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	// Write a valid config.toml at the XDG path for reload to read
 	xdgPath, err := config.XDGConfigPath()
@@ -823,7 +825,7 @@ cooldown_sec = 60
 // ── Log Level API ─────────────────────────────────────
 
 func TestLogLevelHandler_Success(t *testing.T) {
-		srv := newTestServer([]string{"key-a"})
+	srv := newTestServer([]string{"key-a"})
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/api/log-level", "application/json", strings.NewReader(`{"level":"debug"}`))
@@ -847,7 +849,7 @@ func TestLogLevelHandler_Success(t *testing.T) {
 }
 
 func TestLogLevelHandler_InvalidLevel(t *testing.T) {
-		srv := newTestServer([]string{"key-a"})
+	srv := newTestServer([]string{"key-a"})
 	defer srv.Close()
 
 	resp, err := http.Post(srv.URL+"/api/log-level", "application/json", strings.NewReader(`{"level":"verbose"}`))
@@ -862,7 +864,7 @@ func TestLogLevelHandler_InvalidLevel(t *testing.T) {
 }
 
 func TestLogLevelHandler_WrongMethod(t *testing.T) {
-		srv := newTestServer([]string{"key-a"})
+	srv := newTestServer([]string{"key-a"})
 	defer srv.Close()
 
 	resp, err := http.Get(srv.URL + "/api/log-level")
@@ -877,7 +879,7 @@ func TestLogLevelHandler_WrongMethod(t *testing.T) {
 }
 
 func TestLogLevelHandler_Unauthorized(t *testing.T) {
-		cfg := &config.Config{
+	cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -907,7 +909,7 @@ func TestLogLevelHandler_Unauthorized(t *testing.T) {
 // ── Keys DELETE — 1-based index validation ─────────────
 
 func TestKeysHandlerDelete_OneBased(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	// GET initial count
@@ -956,7 +958,7 @@ func TestKeysHandlerDelete_OneBased(t *testing.T) {
 }
 
 func TestKeysHandlerDelete_IndexZeroReturns400(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	reqBody := `{"index":0}`
@@ -977,7 +979,7 @@ func TestKeysHandlerDelete_IndexZeroReturns400(t *testing.T) {
 }
 
 func TestKeysHandlerDelete_IndexNegativeReturns400(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	reqBody := `{"index":-1}`
@@ -998,7 +1000,7 @@ func TestKeysHandlerDelete_IndexNegativeReturns400(t *testing.T) {
 }
 
 func TestKeysHandlerDelete_IndexTooLargeReturns400(t *testing.T) {
-		srv := newTestServer([]string{"key-a", "key-b", "key-c"})
+	srv := newTestServer([]string{"key-a", "key-b", "key-c"})
 	defer srv.Close()
 
 	reqBody := `{"index":999}`
@@ -1021,7 +1023,7 @@ func TestKeysHandlerDelete_IndexTooLargeReturns400(t *testing.T) {
 // ── DELETE /api/keys — unauthenticated ──────────────────
 
 func TestKeysHandlerDelete_Unauthenticated(t *testing.T) {
-		cfg := &config.Config{
+	cfg := &config.Config{
 		TargetBase:  "http://localhost:19999",
 		GenaiBase:   "http://localhost:19999",
 		Port:        19999,
@@ -1066,7 +1068,7 @@ func TestKeysHandlerDelete_Unauthenticated(t *testing.T) {
 // ── Config POST — unauthenticated ──────────────────────
 
 func TestConfigHandlerPost_Unauthenticated(t *testing.T) {
-		origDir, err := os.Getwd()
+	origDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}

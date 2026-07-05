@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -8,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"akswitch/internal/cmd"
+
 	"akswitch/internal/config"
 	"akswitch/internal/keypool"
 )
@@ -17,24 +21,24 @@ import (
 // TestKeyAdd_AddsKey verifies that "akswitch key add <provider> <key>"
 // adds a key to the provider's encrypted key store.
 func TestKeyAdd_AddsKey(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	// Init config and add a provider
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
 		t.Fatalf("XDGConfigPath failed: %v", err)
 	}
-	runCommand(t, "akswitch", "config", "init", "-p", xdgPath)
-	runCommand(t, "akswitch", "provider", "add", "keytest",
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "keytest",
 		"--target", "https://keytest.api.com/v1",
 		"--port", "9501",
 	)
 
 	// Add a key
-	runCommand(t, "akswitch", "key", "add", "keytest", "sk-test-key-12345")
+	cmd.RunCommand(t, "akswitch", "key", "add", "keytest", "sk-test-key-12345")
 
 	// Verify key was added to the store
 	keysDir := filepath.Join(filepath.Dir(xdgPath), "keys")
@@ -54,24 +58,24 @@ t.Cleanup(func() { config.ConfigDir = "" })
 // TestKeyList_ShowsKeys verifies that "akswitch key list <provider>"
 // displays the correct key information.
 func TestKeyList_ShowsKeys(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
 		t.Fatalf("XDGConfigPath failed: %v", err)
 	}
-	runCommand(t, "akswitch", "config", "init", "-p", xdgPath)
-	runCommand(t, "akswitch", "provider", "add", "listtest",
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "listtest",
 		"--target", "https://listtest.api.com/v1",
 		"--port", "9502",
 	)
 
 	// Add two keys
-	runCommand(t, "akswitch", "key", "add", "listtest", "sk-list-key-aaaa")
-	runCommand(t, "akswitch", "key", "add", "listtest", "sk-list-key-bbbb")
+	cmd.RunCommand(t, "akswitch", "key", "add", "listtest", "sk-list-key-aaaa")
+	cmd.RunCommand(t, "akswitch", "key", "add", "listtest", "sk-list-key-bbbb")
 
 	// Capture list output
 	var stdout bytes.Buffer
@@ -79,7 +83,7 @@ t.Cleanup(func() { config.ConfigDir = "" })
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	runCommand(t, "akswitch", "key", "list", "listtest")
+	cmd.RunCommand(t, "akswitch", "key", "list", "listtest")
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -100,25 +104,25 @@ t.Cleanup(func() { config.ConfigDir = "" })
 // TestKeyRemove_RemovesKey verifies that "akswitch key remove <provider> <index>"
 // removes the key at the given index.
 func TestKeyRemove_RemovesKey(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
 		t.Fatalf("XDGConfigPath failed: %v", err)
 	}
-	runCommand(t, "akswitch", "config", "init", "-p", xdgPath)
-	runCommand(t, "akswitch", "provider", "add", "removetest",
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "removetest",
 		"--target", "https://removetest.api.com/v1",
 		"--port", "9503",
 	)
 
 	// Add two keys, then remove the first
-	runCommand(t, "akswitch", "key", "add", "removetest", "sk-remove-key-1")
-	runCommand(t, "akswitch", "key", "add", "removetest", "sk-remove-key-2")
-	runCommand(t, "akswitch", "key", "remove", "removetest", "0")
+	cmd.RunCommand(t, "akswitch", "key", "add", "removetest", "sk-remove-key-1")
+	cmd.RunCommand(t, "akswitch", "key", "add", "removetest", "sk-remove-key-2")
+	cmd.RunCommand(t, "akswitch", "key", "remove", "removetest", "0")
 
 	// Verify key[0] was removed (should now be "sk-remove-key-2")
 	keysDir := filepath.Join(filepath.Dir(xdgPath), "keys")
@@ -138,24 +142,24 @@ t.Cleanup(func() { config.ConfigDir = "" })
 // TestKeyDisable_DisablesKey verifies that "akswitch key disable <provider> <index>"
 // marks the key as disabled.
 func TestKeyDisable_DisablesKey(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
 		t.Fatalf("XDGConfigPath failed: %v", err)
 	}
-	runCommand(t, "akswitch", "config", "init", "-p", xdgPath)
-	runCommand(t, "akswitch", "provider", "add", "disabletest",
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "disabletest",
 		"--target", "https://disabletest.api.com/v1",
 		"--port", "9504",
 	)
 
 	// Add a key and disable it
-	runCommand(t, "akswitch", "key", "add", "disabletest", "sk-disable-key-1")
-	runCommand(t, "akswitch", "key", "disable", "disabletest", "0")
+	cmd.RunCommand(t, "akswitch", "key", "add", "disabletest", "sk-disable-key-1")
+	cmd.RunCommand(t, "akswitch", "key", "disable", "disabletest", "0")
 
 	// Verify key is disabled
 	keysDir := filepath.Join(filepath.Dir(xdgPath), "keys")
@@ -175,23 +179,23 @@ t.Cleanup(func() { config.ConfigDir = "" })
 // TestKeyRemove_InvalidIndex verifies that removing with an out-of-range
 // index returns an error.
 func TestKeyRemove_InvalidIndex(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
 		t.Fatalf("XDGConfigPath failed: %v", err)
 	}
-	runCommand(t, "akswitch", "config", "init", "-p", xdgPath)
-	runCommand(t, "akswitch", "provider", "add", "errtest",
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "errtest",
 		"--target", "https://errtest.api.com/v1",
 		"--port", "9505",
 	)
-	runCommand(t, "akswitch", "key", "add", "errtest", "sk-err-key-1")
+	cmd.RunCommand(t, "akswitch", "key", "add", "errtest", "sk-err-key-1")
 
-	err = runCommand(t, "akswitch", "key", "remove", "errtest", "999")
+	err = cmd.RunCommand(t, "akswitch", "key", "remove", "errtest", "999")
 	if err == nil {
 		t.Fatal("expected error for out-of-range index, got nil")
 	}

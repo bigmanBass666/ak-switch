@@ -1,4 +1,6 @@
-﻿package config
+//go:build unit
+
+package config
 
 import (
 	"os"
@@ -19,12 +21,11 @@ func resetEnv() {
 		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC",
 		"UPSTREAM_CB_THRESHOLD", "KEYS_FILE",
 		"HEALTH_CHECK_INTERVAL_SEC", "HEALTH_CHECK_PATH", "HEALTH_CHECK_TIMEOUT_SEC",
-			"KEYS_ENCRYPTION_KEY",
+		"KEYS_ENCRYPTION_KEY",
 	} {
 		os.Unsetenv(key)
 	}
 }
-
 
 func TestValidate_InvalidPort(t *testing.T) {
 	tests := []struct {
@@ -180,7 +181,6 @@ func TestConfig_HealthCheckTimeoutTooSmall(t *testing.T) {
 		t.Error("Validate() expected error for HealthCheckTimeoutSec=0, got nil")
 	}
 }
-
 
 func TestConfig_EncryptionKey_Default(t *testing.T) {
 	cfg := DefaultConfig()
@@ -644,7 +644,6 @@ func TestXDGConfigPath(t *testing.T) {
 	}
 }
 
-
 func TestLoadToml_WithGenai(t *testing.T) {
 	tmpDir := t.TempDir()
 	tomlPath := filepath.Join(tmpDir, "genai.toml")
@@ -804,8 +803,6 @@ genai = "https://ai.example.com"
 		t.Errorf("MaxRetries = %d, want default 3", cfg.MaxRetries)
 	}
 }
-
-
 
 // ── FindServerPort ───────────────────────────────
 

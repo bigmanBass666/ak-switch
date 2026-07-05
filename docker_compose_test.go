@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -81,9 +83,9 @@ func TestGrafanaDashboard_PanelsHaveTargets(t *testing.T) {
 			Title   string `json:"title"`
 			Type    string `json:"type"`
 			Targets []struct {
-				Expr        string `json:"expr"`
-				LegendFmt   string `json:"legendFormat"`
-				RefID       string `json:"refId"`
+				Expr      string `json:"expr"`
+				LegendFmt string `json:"legendFormat"`
+				RefID     string `json:"refId"`
 			} `json:"targets"`
 		} `json:"panels"`
 	}

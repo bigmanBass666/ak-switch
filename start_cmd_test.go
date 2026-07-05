@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -29,17 +31,17 @@ func TestStartCmd_TOMLMode(t *testing.T) {
 		return
 	}
 
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
 	t.Cleanup(func() { config.ConfigDir = "" })
 
-	runCommand(t, "akswitch", "provider", "add", "testp",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "testp",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", "19301",
 	)
-	runCommand(t, "akswitch", "key", "add", "testp", "sk-test-key-12345")
+	cmd.RunCommand(t, "akswitch", "key", "add", "testp", "sk-test-key-12345")
 
 	testExe, err := os.Executable()
 	if err != nil {
@@ -87,12 +89,12 @@ func TestStartCmd_NoKeys(t *testing.T) {
 		return
 	}
 
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
 	t.Cleanup(func() { config.ConfigDir = "" })
 
-	runCommand(t, "akswitch", "provider", "add", "nokey",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "nokey",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", "19302",
@@ -131,24 +133,24 @@ func TestStartCmd_ProviderFilter(t *testing.T) {
 		return
 	}
 
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
 	t.Cleanup(func() { config.ConfigDir = "" })
 
-	runCommand(t, "akswitch", "provider", "add", "test-a",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "test-a",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", "19305",
 	)
-	runCommand(t, "akswitch", "key", "add", "test-a", "sk-test-key-aaa")
+	cmd.RunCommand(t, "akswitch", "key", "add", "test-a", "sk-test-key-aaa")
 
-	runCommand(t, "akswitch", "provider", "add", "test-b",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "test-b",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", "19306",
 	)
-	runCommand(t, "akswitch", "key", "add", "test-b", "sk-test-key-bbb")
+	cmd.RunCommand(t, "akswitch", "key", "add", "test-b", "sk-test-key-bbb")
 
 	testExe, err := os.Executable()
 	if err != nil {
@@ -196,26 +198,26 @@ func TestStartCmd_AllFlag(t *testing.T) {
 		return
 	}
 
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
 	t.Cleanup(func() { config.ConfigDir = "" })
 
 	sharedPort := "19308"
 
-	runCommand(t, "akswitch", "provider", "add", "test-a",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "test-a",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", sharedPort,
 	)
-	runCommand(t, "akswitch", "key", "add", "test-a", "sk-test-key-aaa")
+	cmd.RunCommand(t, "akswitch", "key", "add", "test-a", "sk-test-key-aaa")
 
-	runCommand(t, "akswitch", "provider", "add", "test-b",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "test-b",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", sharedPort,
 	)
-	runCommand(t, "akswitch", "key", "add", "test-b", "sk-test-key-bbb")
+	cmd.RunCommand(t, "akswitch", "key", "add", "test-b", "sk-test-key-bbb")
 
 	testExe, err := os.Executable()
 	if err != nil {
@@ -278,26 +280,26 @@ func TestStartCmd_DefaultProvider(t *testing.T) {
 		return
 	}
 
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
 	t.Cleanup(func() { config.ConfigDir = "" })
 
 	sharedPort := "19309"
 
-	runCommand(t, "akswitch", "provider", "add", "default-a",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "default-a",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", sharedPort,
 	)
-	runCommand(t, "akswitch", "key", "add", "default-a", "sk-test-key-aaa")
+	cmd.RunCommand(t, "akswitch", "key", "add", "default-a", "sk-test-key-aaa")
 
-	runCommand(t, "akswitch", "provider", "add", "other-b",
+	cmd.RunCommand(t, "akswitch", "provider", "add", "other-b",
 		"--target", "http://localhost:18999/v1",
 		"--genai", "http://localhost:18999",
 		"--port", sharedPort,
 	)
-	runCommand(t, "akswitch", "key", "add", "other-b", "sk-test-key-bbb")
+	cmd.RunCommand(t, "akswitch", "key", "add", "other-b", "sk-test-key-bbb")
 
 	// Add default_provider to config.toml
 	configPath := filepath.Join(tmpDir, "config.toml")

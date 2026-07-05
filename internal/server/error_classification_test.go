@@ -1,3 +1,5 @@
+//go:build unit
+
 package server
 
 import (
@@ -11,14 +13,14 @@ import (
 
 func TestCategorizeError_NonRetryableStatusCodes(t *testing.T) {
 	codes := []int{
-		http.StatusBadRequest,          // 400
-		http.StatusMethodNotAllowed,    // 405
-		http.StatusNotAcceptable,       // 406
+		http.StatusBadRequest,            // 400
+		http.StatusMethodNotAllowed,      // 405
+		http.StatusNotAcceptable,         // 406
 		http.StatusRequestEntityTooLarge, // 413
-		http.StatusRequestURITooLong,   // 414
-		http.StatusUnsupportedMediaType, // 415
-		http.StatusUnprocessableEntity, // 422
-		http.StatusNotImplemented,      // 501
+		http.StatusRequestURITooLong,     // 414
+		http.StatusUnsupportedMediaType,  // 415
+		http.StatusUnprocessableEntity,   // 422
+		http.StatusNotImplemented,        // 501
 	}
 
 	for _, code := range codes {
@@ -32,22 +34,22 @@ func TestCategorizeError_NonRetryableStatusCodes(t *testing.T) {
 
 func TestCategorizeError_RetryableStatusCodes(t *testing.T) {
 	codes := []int{
-		http.StatusTooManyRequests,          // 429
-		http.StatusBadGateway,               // 502
-		http.StatusServiceUnavailable,       // 503
-		http.StatusGatewayTimeout,           // 504
-		http.StatusInternalServerError,      // 500
-		http.StatusUnauthorized,             // 401
-		http.StatusForbidden,                // 403
-		http.StatusNotFound,                 // 404
-		http.StatusRequestTimeout,           // 408
-		http.StatusConflict,                 // 409
-		http.StatusGone,                     // 410
-		http.StatusPreconditionFailed,       // 412
-		http.StatusTooManyRequests,          // 429
-		http.StatusRequestHeaderFieldsTooLarge, // 431
+		http.StatusTooManyRequests,               // 429
+		http.StatusBadGateway,                    // 502
+		http.StatusServiceUnavailable,            // 503
+		http.StatusGatewayTimeout,                // 504
+		http.StatusInternalServerError,           // 500
+		http.StatusUnauthorized,                  // 401
+		http.StatusForbidden,                     // 403
+		http.StatusNotFound,                      // 404
+		http.StatusRequestTimeout,                // 408
+		http.StatusConflict,                      // 409
+		http.StatusGone,                          // 410
+		http.StatusPreconditionFailed,            // 412
+		http.StatusTooManyRequests,               // 429
+		http.StatusRequestHeaderFieldsTooLarge,   // 431
 		http.StatusNetworkAuthenticationRequired, // 511
-		200, // success — edge case
+		200,                                      // success — edge case
 	}
 
 	for _, code := range codes {

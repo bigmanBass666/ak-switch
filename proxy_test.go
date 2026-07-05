@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -1259,7 +1261,6 @@ func TestProxy_AllDisabled_Returns503(t *testing.T) {
 	}
 }
 
-
 // ---------------------------------------------------------------------------
 // NonRetryable error classification tests
 // ---------------------------------------------------------------------------
@@ -1384,9 +1385,9 @@ func TestProxy_NonRetryable_DoesNotPenalizeKey(t *testing.T) {
 	}
 }
 
-	// ---------------------------------------------------------------------------
-	// Key persistence tests
-	// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Key persistence tests
+// ---------------------------------------------------------------------------
 
 // TestKeyPersistence_AddKeyRestart verifies that adding a key via API
 // persists it to disk and survives a restart.
@@ -1629,13 +1630,13 @@ func TestKeyEncryption_EndToEnd(t *testing.T) {
 	keysFile := filepath.Join(tmpDir, "keys.json")
 
 	cfg := &config.Config{
-		TargetBase:     upstream.URL,
-		GenaiBase:      upstream.URL,
-		Port:           0,
-		MaxRetries:     3,
-		CooldownSec:    60,
-		KeysFile:       keysFile,
-		EncryptionKey:  makeEncKey('T'),
+		TargetBase:    upstream.URL,
+		GenaiBase:     upstream.URL,
+		Port:          0,
+		MaxRetries:    3,
+		CooldownSec:   60,
+		KeysFile:      keysFile,
+		EncryptionKey: makeEncKey('T'),
 	}
 	pool := keypool.NewKeyPool([]string{"initial-key"}, nil)
 

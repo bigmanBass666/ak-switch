@@ -1,3 +1,5 @@
+//go:build integration
+
 package main
 
 import (
@@ -10,24 +12,10 @@ import (
 	"akswitch/internal/config"
 )
 
-// resetConfigEnv clears all config-related env vars to prevent interference.
-func resetConfigEnv() {
-	resetAllEnv()
-	config.DefaultProviderName = ""
-	for _, k := range []string{
-		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC",
-		"UPSTREAM_CB_THRESHOLD", "KEYS_FILE",
-		"HEALTH_CHECK_INTERVAL_SEC", "HEALTH_CHECK_PATH", "HEALTH_CHECK_TIMEOUT_SEC",
-		"KEYS_ENCRYPTION_KEY",
-	} {
-		os.Unsetenv(k)
-	}
-}
-
 // TestConfigInit_CreatesFile verifies that "akswitch config init -p <path>"
 // creates a valid TOML config file at the specified path.
 func TestConfigInit_CreatesFile(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	configPath := tmpDir + "/config.toml"
 
@@ -59,10 +47,10 @@ func TestConfigInit_CreatesFile(t *testing.T) {
 // TestConfigView_ShowsConfig verifies that "akswitch config view" prints
 // the current configuration from config.toml.
 func TestConfigView_ShowsConfig(t *testing.T) {
-	resetConfigEnv()
+	cmd.ResetConfigEnv()
 	tmpDir := t.TempDir()
 	config.ConfigDir = tmpDir
-t.Cleanup(func() { config.ConfigDir = "" })
+	t.Cleanup(func() { config.ConfigDir = "" })
 
 	xdgPath, err := config.XDGConfigPath()
 	if err != nil {
