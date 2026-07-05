@@ -172,7 +172,11 @@ Example output:
 		fmt.Printf("  %-12s %-50s %s\n", "NAME", "TARGET", "PORT")
 		for _, n := range names {
 			p := tc.Provider[n]
-			fmt.Printf("  %-12s %-50s %d\n", n, p.Target, tc.Port)
+			defaultMark := ""
+			if n == tc.DefaultProvider {
+				defaultMark = "  (default)"
+			}
+			fmt.Printf("  %-12s %-50s %d%s\n", n, p.Target, tc.Port, defaultMark)
 		}
 
 		return nil
@@ -211,6 +215,13 @@ Example:
 		}
 
 		delete(tc.Provider, name)
+
+		// If the removed provider was the default, clear it
+		if tc.DefaultProvider == name {
+			tc.DefaultProvider = ""
+			config.DefaultProviderName = ""
+			fmt.Printf("Default provider cleared (was %q)\n", name)
+		}
 
 		if err := config.SaveTomlConfig(tc, source); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)

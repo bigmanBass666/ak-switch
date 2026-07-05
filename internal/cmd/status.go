@@ -43,6 +43,10 @@ var statusCmd = &cobra.Command{
 		body, _ := io.ReadAll(resp.Body)
 		var healthData map[string]interface{}
 		if err := json.Unmarshal(body, &healthData); err != nil {
+			// Check if response is non-JSON (e.g., HTML from another service)
+			if len(body) > 0 && body[0] != '{' && body[0] != '[' {
+				return fmt.Errorf("server not running or returned unexpected response (HTTP %d)", resp.StatusCode)
+			}
 			return fmt.Errorf("failed to parse health response: %w", err)
 		}
 
