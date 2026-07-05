@@ -17,11 +17,6 @@ var dashHTML string
 var rootCmd = &cobra.Command{
 	Use:   "akswitch",
 	Short: "API Key rotation proxy for AI providers",
-	Run: func(cmd *cobra.Command, args []string) {
-		providerFilter, _ := cmd.Flags().GetString("provider")
-		startAll, _ := cmd.Flags().GetBool("all")
-		startServer(dashHTML, providerFilter, startAll)
-	},
 }
 
 var versionCmd = &cobra.Command{
@@ -38,7 +33,5 @@ func Execute(dashboardHTML string) error {
 }
 
 func init() {
-	rootCmd.Flags().String("provider", "", "Only start the specified provider")
-	rootCmd.Flags().Bool("all", false, "Start all providers (default: first provider alphabetically, or error if none configured)")
 	rootCmd.AddCommand(versionCmd)
 }
