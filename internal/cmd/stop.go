@@ -19,7 +19,7 @@ var stopCmd = &cobra.Command{
 	Short: "Stop the running akswitch server",
 	Long:  `Stop the akswitch proxy server gracefully using the PID file.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		pidData, err := os.ReadFile(PidFileName)
+		pidData, err := os.ReadFile(pidFilePath())
 		if err != nil {
 			fmt.Println("Could not read PID file. Try:")
 			fmt.Println("  - Windows: taskkill /F /IM akswitch.exe")
@@ -33,7 +33,7 @@ var stopCmd = &cobra.Command{
 			fmt.Println("Invalid PID in file. Try:")
 			fmt.Println("  - Windows: taskkill /F /IM akswitch.exe")
 			fmt.Println("  - Linux/macOS: kill $(pgrep akswitch)")
-			return fmt.Errorf("invalid PID in %s", PidFileName)
+			return fmt.Errorf("invalid PID in %s", pidFilePath())
 		}
 
 		fmt.Printf("Stopping akswitch (PID %d)...\n", pid)
@@ -60,7 +60,7 @@ var stopCmd = &cobra.Command{
 		select {
 		case <-done:
 			fmt.Println("AK Switch stopped gracefully")
-			os.Remove(PidFileName)
+			_ = os.Remove(pidFilePath())
 			return nil
 		case <-time.After(10 * time.Second):
 			fmt.Println("Timed out waiting for graceful shutdown.")

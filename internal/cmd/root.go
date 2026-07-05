@@ -10,8 +10,6 @@ const (
 	adminPort = 8080
 )
 
-var PidFileName = "akswitch.pid"
-
 var dashHTML string
 
 var rootCmd = &cobra.Command{

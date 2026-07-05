@@ -39,7 +39,7 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 	defer server.CrashRecover("startServer")
 
 	// ── PID pre-check ───────────────────────────────
-	if running, pid := checkPidFile(PidFileName); running {
+	if running, pid := checkPidFile(pidFilePath()); running {
 		slog.Error("akswitch is already running", "pid", pid)
 		fmt.Fprintf(os.Stderr, "akswitch is already running (PID %d). Stop it first with 'akswitch stop'.\n", pid)
 		os.Exit(1)
@@ -150,12 +150,16 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 	}
 
 	// ── Write PID file ─────────────────────────────────
-	pidData := []byte(fmt.Sprintf("%d\n", os.Getpid()))
-	if err := os.WriteFile(PidFileName, pidData, 0644); err != nil {
+	pidPath := pidFilePath()
+	if err := os.MkdirAll(filepath.Dir(pidPath), 0755); err != nil {
+		slog.Warn("failed to create PID file directory", "error", err)
+	}
+		pidData := []byte(fmt.Sprintf("%d\n", os.Getpid()))
+	if err := os.WriteFile(pidPath, pidData, 0644); err != nil {
 		slog.Warn("failed to write PID file", "error", err)
 	}
 	defer func() {
-		if err := os.Remove(PidFileName); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(pidPath); err != nil && !os.IsNotExist(err) {
 			slog.Warn("failed to remove PID file", "error", err)
 		}
 	}()
@@ -209,6 +213,15 @@ func loadKeysForProvider(name string, cfg *config.Config) (keys, names []string)
 	}
 
 	return keys, names
+}
+
+// pidFilePath returns the path to the PID file, located in the config directory.
+func pidFilePath() string {
+	xdgPath, err := config.XDGConfigPath()
+	if err != nil {
+		return "akswitch.pid"
+	}
+	return filepath.Join(filepath.Dir(xdgPath), "akswitch.pid")
 }
 
 // checkPidFile reads the PID file and checks if the process is still running.
