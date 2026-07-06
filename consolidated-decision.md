@@ -148,20 +148,20 @@
 | 改动风险 | 🟢 无 |
 | **决策** | **🔲 本周**（在改相关文件时顺手做） |
 
-### 2.4 🔵 P3 — 下月排期
+### 2.4 🔵 已完成
 
 #### F9: MaskKey 文档与实现不一致
 > CLAUDE.md 记录 "Key ≤6 字符时 MaskKey 输出 `****`"，实际代码使用 ≤12
 
-- **决策**：**📅 排期**，更新 CLAUDE.md 以匹配实现
+- **状态**：✅ **已完成** — CLAUDE.md 已更新为 ≤12
 
 #### F4: MaskSensitiveData 只匹配 `sk-` 前缀
-- **决策**：**📅 排期**，扩展匹配模式覆盖已知 API key 前缀（`nvapi-`、`sk-` 等）
+- **状态**：✅ **已完成** — 新增 `nvapi-` 匹配，提取为可扩展的 `keyPrefixes` 列表
 
 #### F8/F18: 其他低级别清理
-- `streamResponse` 使用 `defer resp.Body.Close()` → 📅 下月
-- 测试 env var 清理列表提取共用 → 📅 下月
-- Port 检测共享函数 → 📅 下月
+- `streamResponse` 使用 `defer resp.Body.Close()` ✅ Round 1
+- 测试 env var 清理列表提取共用 ✅ Round 5
+- Port 检测共享函数 ✅ Phase 2
 
 ### 2.5 ⚪ 观察（当前不处理）
 

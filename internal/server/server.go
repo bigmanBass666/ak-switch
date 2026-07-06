@@ -232,28 +232,33 @@ func CloseFileHandler() {
 	}
 }
 
+// keyPrefixes are known API key prefixes to mask in debug logging.
+var keyPrefixes = []string{"sk-", "nvapi-"}
+
 // MaskSensitiveData scrubs potential API key patterns from a string for safe debug logging.
-// It masks any word-like token that starts with "sk-" by replacing it with "***".
+// It masks any word-like token starting with a known key prefix by replacing it with "***".
 // It also truncates the result to maxLen bytes.
 func MaskSensitiveData(data string, maxLen int) string {
 	if len(data) > maxLen {
 		data = data[:maxLen]
 	}
-	// Mask sk- prefixed tokens (API key patterns)
+	// Mask known API key prefixes
 	result := data
 	lower := strings.ToLower(data)
-	idx := strings.Index(lower, "sk-")
-	for idx >= 0 {
-		// Find end of token (word boundary)
-		end := idx + 3 // start of actual key after "sk-"
-		for end < len(result) && (isAlphaNum(result[end]) || result[end] == '-' || result[end] == '_') {
-			end++
+	for _, prefix := range keyPrefixes {
+		idx := strings.Index(lower, prefix)
+		for idx >= 0 {
+			// Find end of token (word boundary)
+			end := idx + len(prefix)
+			for end < len(result) && (isAlphaNum(result[end]) || result[end] == '-' || result[end] == '_') {
+				end++
+			}
+			if end > idx+len(prefix) {
+				result = result[:idx] + "***" + result[end:]
+				lower = strings.ToLower(result)
+			}
+			idx = strings.Index(lower, prefix)
 		}
-		if end > idx+3 {
-			result = result[:idx] + "***" + result[end:]
-			lower = strings.ToLower(result)
-		}
-		idx = strings.Index(lower, "sk-")
 	}
 	return result
 }

@@ -115,3 +115,22 @@ func TestMaskSensitiveData_KeyAtEnd(t *testing.T) {
 		t.Errorf("expected key at end to be masked, got %q", result)
 	}
 }
+
+func TestMaskSensitiveData_NvapiPrefix(t *testing.T) {
+	input := "using nvapi-xiKMDpevXK60t6gLsGW1 for nvidia"
+	result := MaskSensitiveData(input, 100)
+	if strings.Contains(result, "nvapi-xiKMDpevXK60t6gLsGW1") {
+		t.Errorf("expected nvapi key to be masked, got %q", result)
+	}
+	if !strings.Contains(result, "***") {
+		t.Errorf("expected masked output to contain ***, got %q", result)
+	}
+}
+
+func TestMaskSensitiveData_MixedPrefixes(t *testing.T) {
+	input := "keys: sk-test-key-12345 and nvapi-xiKMDpevXK60t6gLsGW1"
+	result := MaskSensitiveData(input, 200)
+	if strings.Contains(result, "sk-test-key-12345") || strings.Contains(result, "nvapi-xiKMDpevXK60t6gLsGW1") {
+		t.Errorf("expected both key types to be masked, got %q", result)
+	}
+}

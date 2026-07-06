@@ -26,7 +26,7 @@
 - **测试入口**：所有 CLI 可达路径用 `runCommand()` 或子进程模式
 - **标准**：before/after 对比，不测绝对值快照
 - **不写**：mock 掉一切只测 JSON 的 Handler 测试（如 `handlers_test.go`）
-- **边界**：Key ≤6 字符时 `MaskKey` 输出 `****`
+- **边界**：Key ≤12 字符时 `MaskKey` 输出 `****`
 
 ## 项目定位
 
