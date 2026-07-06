@@ -53,36 +53,14 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 	var lastKey string
 	var lastIdx int
 
-	var bodyBytes []byte
-	if r.Body != nil {
-		r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
-		var err error
-		bodyBytes, err = io.ReadAll(r.Body)
-		r.Body.Close()
-		if err != nil {
-			writeProxyError(w, http.StatusBadRequest, ErrorBadRequest, "request body too large or unreadable")
-			pr.recordProxyMetrics(r.Method, "4xx", "", start)
-			return
-		}
+	bodyBytes, err := readRequestBody(w, r)
+	if err != nil {
+		pr.recordProxyMetrics(r.Method, "4xx", "", start)
+		return
 	}
 
-	// Route /genai/ paths to GenaiBase, everything else to TargetBase
-	var target string
-	if strings.Contains(r.URL.Path, "/genai/") {
-		target = cfg.GenaiBase + r.URL.Path
-		if r.URL.RawQuery != "" {
-			target += "?" + r.URL.RawQuery
-		}
-	} else {
-		path := r.URL.Path
-		if strings.HasSuffix(cfg.TargetBase, "/v1") && strings.HasPrefix(path, "/v1") {
-			path = path[3:]
-		}
-		if r.URL.RawQuery != "" {
-			path += "?" + r.URL.RawQuery
-		}
-		target = cfg.TargetBase + path
-	}
+	// Build target URL
+	target := buildTargetURL(cfg, r.URL.Path, r.URL.RawQuery)
 
 	slog.Info("proxy request", "provider", ps.Name, "method", r.Method, "url", target, "body_size", len(bodyBytes))
 
@@ -115,8 +93,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		if !ok {
 			wait := pool.TimeUntilAvailable()
 			if wait < 0 {
-				writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
-				pr.recordProxyMetrics(r.Method, "5xx", "", start)
+				pr.writeAllKeysExhausted(w, ps, r.Method, start)
 				return
 			}
 			jitter := time.Duration(rand.Intn(500)) * time.Millisecond
@@ -138,8 +115,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 					}
 				}
 				if allPerma {
-					writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
-					pr.recordProxyMetrics(r.Method, "5xx", "", start)
+					pr.writeAllKeysExhausted(w, ps, r.Method, start)
 					return
 				}
 				continue
@@ -256,9 +232,7 @@ func (pr *ProviderRouter) handleRateLimited(w http.ResponseWriter, ps *ProviderS
 		slog.Warn("key quota exhausted, disabling permanently", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx))
 		pool.Disable(idx)
 		if pool.ActiveCount() == 0 {
-			writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
-			pr.recordProxyMetrics(method, "5xx", "", start)
-			return true
+			return pr.writeAllKeysExhausted(w, ps, method, start)
 		}
 	}
 	return false
@@ -381,4 +355,48 @@ func streamResponse(w http.ResponseWriter, resp *http.Response) {
 	} else {
 		io.Copy(w, resp.Body)
 	}
+}
+
+// ── Extracted Utilities ───────────────────────────────
+
+// readRequestBody reads and limits the request body to 10MB.
+// Returns the body bytes, or nil and an error if the body is too large.
+func readRequestBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	if r.Body == nil {
+		return nil, nil
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10MB limit
+	bodyBytes, err := io.ReadAll(r.Body)
+	r.Body.Close()
+	if err != nil {
+		writeProxyError(w, http.StatusBadRequest, ErrorBadRequest, "request body too large or unreadable")
+		return nil, err
+	}
+	return bodyBytes, nil
+}
+
+// buildTargetURL constructs the upstream URL based on path routing rules.
+// Routes /genai/ paths to GenaiBase, everything else to TargetBase.
+func buildTargetURL(cfg *config.Config, path, rawQuery string) string {
+	if strings.Contains(path, "/genai/") {
+		target := cfg.GenaiBase + path
+		if rawQuery != "" {
+			target += "?" + rawQuery
+		}
+		return target
+	}
+	if strings.HasSuffix(cfg.TargetBase, "/v1") && strings.HasPrefix(path, "/v1") {
+		path = path[3:]
+	}
+	if rawQuery != "" {
+		path += "?" + rawQuery
+	}
+	return cfg.TargetBase + path
+}
+
+// writeAllKeysExhausted writes the "all keys exhausted" error response and records metrics.
+func (pr *ProviderRouter) writeAllKeysExhausted(w http.ResponseWriter, ps *ProviderState, method string, start time.Time) bool {
+	writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 API Key 已熔断，请稍后重试", ps.Name))
+	pr.recordProxyMetrics(method, "5xx", "", start)
+	return true
 }
