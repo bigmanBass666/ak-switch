@@ -212,9 +212,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 				continue
 			}
 			if remaining > 0 {
-				time.Sleep(remaining)
-			} else {
-				time.Sleep(10 * time.Millisecond)
+				pool.Cooldown(idx, remaining)
 			}
 			continue
 		}
@@ -307,11 +305,14 @@ func (pr *ProviderRouter) handleRateLimited(w http.ResponseWriter, ps *ProviderS
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	keyCBs[idx].RecordFailure()
-	cooldown := time.Duration(cfg.CooldownSec) * time.Second
+	cbCooldown := keyCBs[idx].RecordFailure()
+	cooldown := cbCooldown
 	if ra := resp.Header.Get("Retry-After"); ra != "" {
 		if secs, err := strconv.Atoi(ra); err == nil {
-			cooldown = time.Duration(secs+2) * time.Second
+			raDuration := time.Duration(secs+2) * time.Second
+			if raDuration > cooldown {
+				cooldown = raDuration
+			}
 		}
 	}
 	pool.Cooldown(idx, cooldown)

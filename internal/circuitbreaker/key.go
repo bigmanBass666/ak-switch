@@ -42,12 +42,13 @@ func NewKeyCircuitBreaker(base, backoffCap time.Duration, multiplier float64) *K
 // RecordFailure records a 429 response and applies exponential backoff.
 // Once the computed backoff reaches the cap, the key enters a long cooldown
 // (equal to the cap duration) rather than permanent disable.
-func (k *KeyCircuitBreaker) RecordFailure() {
+// Returns the cooldown duration that was applied.
+func (k *KeyCircuitBreaker) RecordFailure() time.Duration {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
 	if k.state == StatePermanent {
-		return
+		return 0
 	}
 
 	// Calculate raw cooldown before capping
@@ -59,7 +60,7 @@ func (k *KeyCircuitBreaker) RecordFailure() {
 		k.state = StateOpen
 		k.cooldownUntil = time.Now().Add(k.backoffCap)
 		k.attempt = 0
-		return
+		return k.backoffCap
 	}
 
 	// Add jitter
@@ -78,6 +79,7 @@ func (k *KeyCircuitBreaker) RecordFailure() {
 	k.state = StateOpen
 	k.cooldownUntil = time.Now().Add(cooldown)
 	k.attempt++
+	return cooldown
 }
 
 // RecordPerma marks the key as permanently disabled (e.g., 401/403).
