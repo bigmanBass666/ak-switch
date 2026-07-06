@@ -13,18 +13,7 @@ import (
 
 // resetEnv cleans up all config-related env vars to prevent leakage between tests.
 func resetEnv() {
-	for _, key := range []string{
-		"PORT", "TARGET_BASE_URL", "GENAI_BASE_URL", "ADMIN_TOKEN",
-		"DISABLE_THINKING", "GENAI_MODEL", "MAX_RETRIES", "LOG_LEVEL",
-		"COOLDOWN_SEC", "API_KEYS", "KEY", "KEY1", "KEY2", "KEY3",
-		"KEY4", "KEY5", "KEYA", "KEYB",
-		"BACKOFF_CAP_SEC", "BACKOFF_MULTIPLIER", "CB_RESET_SEC",
-		"UPSTREAM_CB_THRESHOLD", "KEYS_FILE",
-		"HEALTH_CHECK_INTERVAL_SEC", "HEALTH_CHECK_PATH", "HEALTH_CHECK_TIMEOUT_SEC", "HTTP_TIMEOUT_SEC",
-		"KEYS_ENCRYPTION_KEY",
-	} {
-		os.Unsetenv(key)
-	}
+	ResetConfigEnv()
 }
 
 func TestValidate_InvalidPort(t *testing.T) {
