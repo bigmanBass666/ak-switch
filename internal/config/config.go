@@ -49,7 +49,6 @@ type Config struct {
 	LogMaxSize int    // 日志文件轮转大小（MB，默认 100）
 	LogMaxAge  int    // 日志文件保留天数（默认 7）
 
-	HTTPTimeoutSec int // HTTP 客户端超时(秒)，默认 30
 }
 
 
@@ -86,7 +85,6 @@ func DefaultConfig() *Config {
 		KeysFile:            "keys.json",
 		LogMaxSize:          100,
 		LogMaxAge:           7,
-		HTTPTimeoutSec:      30,
 	}
 }
 
