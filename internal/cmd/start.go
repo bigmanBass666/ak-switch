@@ -170,6 +170,12 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 	// ── Signal handling ───────────────────────────────
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	// ── 二进制自监控（开发模式）─────────────────────────
+	if exePath, err := os.Executable(); err == nil {
+		SetupSelfRestart(exePath, sigCh)
+	}
+
 	<-sigCh
 	slog.Info("shutting down")
 
@@ -182,6 +188,9 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 	router.Shutdown(ctx)
 	router.Stop()
 	slog.Info("server stopped gracefully")
+
+	// ── 自监控触发重启 ──────────────────────────────
+	ExecRestart()
 }
 
 // loadKeysForProvider loads API keys for a provider from its keys file or env.
