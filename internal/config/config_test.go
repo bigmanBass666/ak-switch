@@ -412,11 +412,11 @@ target = "https://api.example.com"
 		t.Errorf("Port = %d, want default 8080", cfg.Port)
 	}
 	// CooldownSec should use default from DefaultConfig
-	if cfg.CooldownSec != 60 {
+	if cfg.CooldownSec != 15 {
 		t.Errorf("CooldownSec = %d, want default 60", cfg.CooldownSec)
 	}
 	// MaxRetries should use default from DefaultConfig
-	if cfg.MaxRetries != 3 {
+	if cfg.MaxRetries != 2 {
 		t.Errorf("MaxRetries = %d, want default 3", cfg.MaxRetries)
 	}
 }
@@ -536,10 +536,10 @@ func TestTomlProviderConfig_DefaultValues(t *testing.T) {
 	if cfg.Port != 8080 {
 		t.Errorf("Port = %d, want default 8080", cfg.Port)
 	}
-	if cfg.CooldownSec != 60 {
+	if cfg.CooldownSec != 15 {
 		t.Errorf("CooldownSec = %d, want default 60", cfg.CooldownSec)
 	}
-	if cfg.MaxRetries != 3 {
+	if cfg.MaxRetries != 2 {
 		t.Errorf("MaxRetries = %d, want default 3", cfg.MaxRetries)
 	}
 	if cfg.DisableThinking {
@@ -835,10 +835,10 @@ genai = "https://ai.example.com"
 	if cfg.Port != 8080 {
 		t.Errorf("Port = %d, want default 8080", cfg.Port)
 	}
-	if cfg.CooldownSec != 60 {
+	if cfg.CooldownSec != 15 {
 		t.Errorf("CooldownSec = %d, want default 60", cfg.CooldownSec)
 	}
-	if cfg.MaxRetries != 3 {
+	if cfg.MaxRetries != 2 {
 		t.Errorf("MaxRetries = %d, want default 3", cfg.MaxRetries)
 	}
 }

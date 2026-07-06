@@ -212,9 +212,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 				continue
 			}
 			if remaining > 0 {
-				time.Sleep(remaining)
-			} else {
-				time.Sleep(10 * time.Millisecond)
+				pool.Cooldown(idx, remaining)
 			}
 			continue
 		}
@@ -307,11 +305,14 @@ func (pr *ProviderRouter) handleRateLimited(w http.ResponseWriter, ps *ProviderS
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	keyCBs[idx].RecordFailure()
-	cooldown := time.Duration(cfg.CooldownSec) * time.Second
+	cbCooldown := keyCBs[idx].RecordFailure()
+	cooldown := cbCooldown
 	if ra := resp.Header.Get("Retry-After"); ra != "" {
 		if secs, err := strconv.Atoi(ra); err == nil {
-			cooldown = time.Duration(secs+2) * time.Second
+			raDuration := time.Duration(secs+2) * time.Second
+			if raDuration > cooldown {
+				cooldown = raDuration
+			}
 		}
 	}
 	pool.Cooldown(idx, cooldown)
@@ -339,10 +340,14 @@ func (pr *ProviderRouter) handleAuthRejected(w http.ResponseWriter, ps *Provider
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	slog.Warn("key disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
 	pr.metrics.UpstreamErrors.WithLabelValues("auth_rejected").Inc()
-	pool.Disable(idx)
-	keyCBs[idx].RecordPerma("auth_rejected")
+	if keyCBs[idx].RecordAuthFailure() {
+		pool.Disable(idx)
+		keyCBs[idx].RecordPerma("auth_rejected")
+		slog.Warn("key permanently disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
+	} else {
+		slog.Warn("key auth failure", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "fail_count", keyCBs[idx].AuthFailCount())
+	}
 	if pool.ActiveCount() == 0 {
 		writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 Key 已失效或吊销", ps.Name))
 		pr.recordProxyMetrics(method, "5xx", "", start)

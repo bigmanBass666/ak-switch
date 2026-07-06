@@ -27,9 +27,10 @@ type Config struct {
 	AdminToken      string   // Optional admin authentication token
 	DisableThinking bool     // Disable thinking mode
 	GenaiModel      string   // Generative AI model name
-	MaxRetries      int      // Max retry attempts for upstream (default 3)
+	MaxRetries      int      // Max retry attempts for upstream (default 2)
 	LogLevel        string   // Log level (default "info")
-	CooldownSec     int      // Cooldown seconds after rate-limit (default 60)
+	CooldownSec     int      // Cooldown seconds after rate-limit (default 15)
+	HTTPTimeoutSec  int      // HTTP client timeout in seconds (default 30)
 	Keys            []string // API keys (at least one required)
 	KeyNames        []string // Corresponding key names (empty string if unnamed), same length as Keys
 	KeysFile        string   // JSON file path for key persistence (default "keys.json")
@@ -71,9 +72,10 @@ type ConfigChange struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Port:                8080,
-		MaxRetries:          3,
+		MaxRetries:          2,
 		LogLevel:            "info",
-		CooldownSec:         60,
+		CooldownSec:         15,
+		HTTPTimeoutSec:      30,
 		BackoffCapSec:       120,
 		BackoffMultiplier:   2,
 		CBResetSec:          30,
@@ -290,7 +292,7 @@ type TomlProviderConfig struct {
 	CBResetSec             int     `toml:"cb_reset_sec,omitempty"`
 	UpstreamCBThreshold    int     `toml:"upstream_cb_threshold,omitempty"`
 	HealthCheckIntervalSec int     `toml:"health_check_interval_sec,omitempty"`
-	HTTPTimeoutSec int `toml:"http_timeout_sec,omitempty"`
+	HTTPTimeoutSec          int     `toml:"http_timeout_sec,omitempty"`
 		LogFile    string `toml:"log_file,omitempty"`
 		LogMaxSize int    `toml:"log_max_size,omitempty"`
 		LogMaxAge  int    `toml:"log_max_age,omitempty"`

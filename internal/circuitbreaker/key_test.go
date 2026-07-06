@@ -197,3 +197,106 @@ func TestKeyCircuitBreaker_CooldownRemaining(t *testing.T) {
 		t.Errorf("CooldownRemaining() for PERMA = %v, want -1", got)
 	}
 }
+
+
+func TestKeyCircuitBreaker_RecordAuthFailure_Single(t *testing.T) {
+	cb := NewKeyCircuitBreaker(30*time.Second, 120*time.Second, 2, 3)
+	if cb.AuthFailCount() != 0 {
+		t.Errorf("AuthFailCount() = %d, want 0", cb.AuthFailCount())
+	}
+
+	// Single auth failure should NOT trigger permanent disable
+	if cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure() = true, want false (single failure below threshold)")
+	}
+	if cb.State() == StatePermanent {
+		t.Error("State() = StatePermanent, want StateOpen or StateClosed (single failure should not perma)")
+	}
+	if cb.AuthFailCount() != 1 {
+		t.Errorf("AuthFailCount() = %d, want 1", cb.AuthFailCount())
+	}
+}
+
+func TestKeyCircuitBreaker_RecordAuthFailure_Threshold(t *testing.T) {
+	cb := NewKeyCircuitBreaker(30*time.Second, 120*time.Second, 2, 3)
+
+	// Two failures below threshold
+	if cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure #1 = true, want false")
+	}
+	if cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure #2 = true, want false")
+	}
+	if cb.State() == StatePermanent {
+		t.Error("key should not be permanent after 2 failures")
+	}
+
+	// Third failure reaches threshold
+	if !cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure #3 = false, want true (threshold reached)")
+	}
+
+	// Now permanently disable
+	cb.RecordPerma("auth_rejected")
+	if cb.State() != StatePermanent {
+		t.Errorf("State() = %d, want %d", cb.State(), StatePermanent)
+	}
+}
+
+func TestKeyCircuitBreaker_RecordAuthFailure_ResetBySuccess(t *testing.T) {
+	cb := NewKeyCircuitBreaker(30*time.Second, 120*time.Second, 2, 3)
+
+	cb.RecordAuthFailure() // count=1
+	cb.RecordAuthFailure() // count=2
+
+	// Success resets the counter
+	cb.RecordSuccess()
+	if cb.AuthFailCount() != 0 {
+		t.Errorf("AuthFailCount() after success = %d, want 0", cb.AuthFailCount())
+	}
+
+	// After reset, should need 3 more failures
+	if cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure after reset = true, want false (counter was reset)")
+	}
+	if cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure #2 after reset = true, want false")
+	}
+	if !cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure #3 after reset = false, want true")
+	}
+}
+
+func TestKeyCircuitBreaker_RecordAuthFailure_PermaState(t *testing.T) {
+	cb := NewKeyCircuitBreaker(30*time.Second, 120*time.Second, 2, 3)
+	cb.RecordPerma("auth_rejected")
+
+	// RecordAuthFailure on a permanently disabled key should return false and not change state
+	if cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure on perma key = true, want false")
+	}
+	if cb.State() != StatePermanent {
+		t.Errorf("State() = %d, want %d", cb.State(), StatePermanent)
+	}
+}
+
+func TestKeyCircuitBreaker_RecordAuthFailure_ThresholdZero(t *testing.T) {
+	// permaThreshold=0 means disable immediately on first auth failure
+	cb := NewKeyCircuitBreaker(30*time.Second, 120*time.Second, 2, 0)
+
+	if !cb.RecordAuthFailure() {
+		t.Error("RecordAuthFailure() = false, want true (threshold=0 = immediate)")
+	}
+}
+
+func TestKeyCircuitBreaker_RecordAuthFailure_Reset(t *testing.T) {
+	// Verify Reset clears authFailCount
+	cb := NewKeyCircuitBreaker(30*time.Second, 120*time.Second, 2, 3)
+	cb.RecordAuthFailure()
+	cb.RecordAuthFailure()
+
+	cb.Reset()
+	if cb.AuthFailCount() != 0 {
+		t.Errorf("AuthFailCount() after Reset = %d, want 0", cb.AuthFailCount())
+	}
+}
