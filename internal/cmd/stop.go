@@ -3,8 +3,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -51,21 +54,48 @@ var stopCmd = &cobra.Command{
 			return fmt.Errorf("failed to send interrupt: %w", err)
 		}
 
-		// Wait for process to exit
-		done := make(chan struct{})
-		go func() {
-			proc.Wait()
-			close(done)
-		}()
-		select {
-		case <-done:
+		// Poll for process exit with timeout instead of blocking on proc.Wait().
+		// proc.Wait() on a non-child process can block indefinitely on some
+		// platforms (e.g. Windows), causing a goroutine leak if wrapped in a
+		// goroutine+select pattern. Polling avoids this entirely.
+		deadline := time.Now().Add(10 * time.Second)
+		exited := false
+		for time.Now().Before(deadline) {
+			if !processRunning(pid) {
+				exited = true
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		proc.Release()
+
+		if exited {
 			fmt.Println("AK Switch stopped gracefully")
 			_ = os.Remove(pidFilePath())
 			return nil
-		case <-time.After(10 * time.Second):
-			fmt.Println("Timed out waiting for graceful shutdown.")
-			fmt.Println("Try: kill -9", pid)
-			return fmt.Errorf("shutdown timed out")
 		}
+
+		fmt.Println("Timed out waiting for graceful shutdown.")
+		fmt.Println("Try: kill -9", pid)
+		return fmt.Errorf("shutdown timed out")
 	},
+}
+
+// processRunning checks whether a process with the given PID is still alive.
+func processRunning(pid int) bool {
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/NH")
+		out, err := cmd.Output()
+		if err != nil {
+			return false
+		}
+		return strings.Contains(string(out), strconv.Itoa(pid))
+	}
+	// Unix: signal 0 checks process existence without sending a signal
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	defer proc.Release()
+	return proc.Signal(syscall.Signal(0)) == nil
 }

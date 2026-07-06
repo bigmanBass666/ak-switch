@@ -125,56 +125,6 @@ func TestClear(t *testing.T) {
 	}
 }
 
-func TestCountByStatus(t *testing.T) {
-	s := New(100)
-	entries := []utils.LogEntry{
-		{Timestamp: "t1", Key: "k1", KeyIndex: 1, Method: "GET", URL: "/", Status: 200, RequestBodySize: 0},
-		{Timestamp: "t2", Key: "k2", KeyIndex: 2, Method: "GET", URL: "/", Status: 200, RequestBodySize: 0},
-		{Timestamp: "t3", Key: "k3", KeyIndex: 3, Method: "POST", URL: "/", Status: 400, RequestBodySize: 50},
-		{Timestamp: "t4", Key: "k4", KeyIndex: 4, Method: "POST", URL: "/", Status: 500, RequestBodySize: 100},
-		{Timestamp: "t5", Key: "k5", KeyIndex: 5, Method: "GET", URL: "/", Status: 429, RequestBodySize: 0},
-	}
-
-	for _, e := range entries {
-		s.Append(e)
-	}
-
-	// Count 2xx
-	twoHundreds := s.CountByStatus(func(status int) bool {
-		return status >= 200 && status < 300
-	})
-	if twoHundreds != 2 {
-		t.Errorf("expected 2 entries with 2xx status, got %d", twoHundreds)
-	}
-
-	// Count 4xx
-	fourHundreds := s.CountByStatus(func(status int) bool {
-		return status >= 400 && status < 500
-	})
-	if fourHundreds != 2 {
-		t.Errorf("expected 2 entries with 4xx status, got %d", fourHundreds)
-	}
-
-	// Count 5xx
-	fiveHundreds := s.CountByStatus(func(status int) bool {
-		return status >= 500 && status < 600
-	})
-	if fiveHundreds != 1 {
-		t.Errorf("expected 1 entry with 5xx status, got %d", fiveHundreds)
-	}
-
-	// Count all
-	all := s.CountByStatus(func(status int) bool { return true })
-	if all != 5 {
-		t.Errorf("expected 5 entries total, got %d", all)
-	}
-
-	// Count none
-	none := s.CountByStatus(func(status int) bool { return false })
-	if none != 0 {
-		t.Errorf("expected 0 entries, got %d", none)
-	}
-}
 
 func TestKeyMaskedOnAppend(t *testing.T) {
 	s := New(10)

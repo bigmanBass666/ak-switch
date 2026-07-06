@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"akswitch/internal/config"
 )
 
 func TestLoadKeysFromFile_NotEmpty(t *testing.T) {
@@ -400,5 +402,86 @@ func TestSaveLoad_Encrypted_TamperedFile(t *testing.T) {
 	_, err = LoadFullStore(path)
 	if err == nil {
 		t.Error("LoadFullStore with tampered data: expected error, got nil")
+	}
+}
+
+// ── LoadKeysFromStore tests ─────────────────────────────────────
+
+func TestLoadKeysFromStore_CustomFile(t *testing.T) {
+	SetEncryptionKey(nil)
+
+	dir := t.TempDir()
+	config.ConfigDir = dir
+	defer func() { config.ConfigDir = "" }()
+
+	// Write a custom keys file
+	keysPath := filepath.Join(dir, "my-keys.json")
+	store := &KeyStore{
+		Keys: []KeyEntry{
+			{Key: "sk-key-a", Name: "prod"},
+			{Key: "sk-key-b", Name: "staging"},
+		},
+	}
+	data, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(keysPath, data, 0644); err != nil {
+		t.Fatalf("write keys file: %v", err)
+	}
+
+	cfg := &config.Config{KeysFile: keysPath}
+	keys, names, loaded := LoadKeysFromStore("test", cfg)
+	if !loaded {
+		t.Fatal("LoadKeysFromStore: loaded=false, want true")
+	}
+	if len(keys) != 2 {
+		t.Fatalf("got %d keys, want 2", len(keys))
+	}
+	if keys[0] != "sk-key-a" || keys[1] != "sk-key-b" {
+		t.Errorf("keys mismatch: %v", keys)
+	}
+	if names[0] != "prod" || names[1] != "staging" {
+		t.Errorf("names mismatch: %v", names)
+	}
+}
+
+func TestLoadKeysFromStore_CustomFileNotExist(t *testing.T) {
+	SetEncryptionKey(nil)
+
+	dir := t.TempDir()
+	config.ConfigDir = dir
+	defer func() { config.ConfigDir = "" }()
+
+	cfg := &config.Config{KeysFile: filepath.Join(dir, "nonexistent.json")}
+	keys, names, loaded := LoadKeysFromStore("test", cfg)
+	if loaded {
+		t.Error("LoadKeysFromStore: loaded=true, want false")
+	}
+	if keys != nil {
+		t.Errorf("keys = %v, want nil", keys)
+	}
+	if names != nil {
+		t.Errorf("names = %v, want nil", names)
+	}
+}
+
+func TestLoadKeysFromStore_NoSource(t *testing.T) {
+	SetEncryptionKey(nil)
+
+	dir := t.TempDir()
+	config.ConfigDir = dir
+	defer func() { config.ConfigDir = "" }()
+
+	cfg := &config.Config{}
+	keys, names, loaded := LoadKeysFromStore("test", cfg)
+	if loaded {
+		t.Error("LoadKeysFromStore: loaded=true, want false")
+	}
+	if keys != nil {
+		t.Errorf("keys = %v, want nil", keys)
+	}
+	if names != nil {
+		t.Errorf("names = %v, want nil", names)
 	}
 }

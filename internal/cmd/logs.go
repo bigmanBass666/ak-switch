@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"akswitch/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +24,7 @@ var logsCmd = &cobra.Command{
 		client := &http.Client{Timeout: 5 * time.Second}
 
 		// Determine the server port from config or default
-		port := adminPort
-		if xdgPath, err := config.XDGConfigPath(); err == nil {
-			if p := config.FindServerPort(xdgPath); p > 0 {
-				port = p
-			}
-		}
+		port := detectServerPort()
 
 		logURL := fmt.Sprintf("http://127.0.0.1:%d/logs", port)
 		resp, err := client.Get(logURL)
