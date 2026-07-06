@@ -9,7 +9,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"akswitch/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +24,7 @@ var statusCmd = &cobra.Command{
 		client := &http.Client{Timeout: 3 * time.Second}
 
 		// Determine the server port from config or default
-		port := adminPort
-		if xdgPath, err := config.XDGConfigPath(); err == nil {
-			if p := config.FindServerPort(xdgPath); p > 0 {
-				port = p
-			}
-		}
+		port := detectServerPort()
 
 		// Query health endpoint on the server port
 		healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)

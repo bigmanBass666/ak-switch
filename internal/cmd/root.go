@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"akswitch/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,17 @@ var versionCmd = &cobra.Command{
 func Execute(dashboardHTML string) error {
 	dashHTML = dashboardHTML
 	return rootCmd.Execute()
+}
+
+// detectServerPort returns the server port from the config file,
+// falling back to the default admin port if detection fails.
+func detectServerPort() int {
+	if xdgPath, err := config.XDGConfigPath(); err == nil {
+		if p := config.FindServerPort(xdgPath); p > 0 {
+			return p
+		}
+	}
+	return adminPort
 }
 
 func init() {

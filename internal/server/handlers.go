@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -61,23 +60,45 @@ func (pr *ProviderRouter) resolveProvider(r *http.Request) (*ProviderState, stri
 	return ps, ""
 }
 
-// checkAdminToken validates the X-Admin-Token header against any configured admin token.
-func (pr *ProviderRouter) checkAdminToken(w http.ResponseWriter, r *http.Request) bool {
+// checkAdminToken validates the X-Admin-Token header against a specific provider's admin token.
+func (pr *ProviderRouter) checkAdminToken(w http.ResponseWriter, r *http.Request, providerName string) bool {
+	pr.mu.RLock()
+	defer pr.mu.RUnlock()
+	ps, ok := pr.providers[providerName]
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	token := r.Header.Get("X-Admin-Token")
+	if ps.Config.AdminToken == "" {
+		// No admin token configured for this provider — access allowed
+		return true
+	}
+	if ps.Config.AdminToken == token {
+		return true
+	}
+	http.Error(w, "unauthorized", http.StatusUnauthorized)
+	return false
+}
+
+// checkAnyAdminToken validates the X-Admin-Token header against any configured admin token.
+// If at least one provider has an AdminToken configured, a valid token must be provided.
+// If no providers have AdminToken configured, access is allowed without token.
+func (pr *ProviderRouter) checkAnyAdminToken(w http.ResponseWriter, r *http.Request) bool {
 	pr.mu.RLock()
 	defer pr.mu.RUnlock()
 	token := r.Header.Get("X-Admin-Token")
+	hasAnyToken := false
 	for _, ps := range pr.providers {
-		if ps.Config.AdminToken != "" && ps.Config.AdminToken == token {
-			return true
-		}
-		if ps.Config.AdminToken == "" {
-			// If any provider has no admin token configured, auth is not required
-			return true
+		if ps.Config.AdminToken != "" {
+			hasAnyToken = true
+			if ps.Config.AdminToken == token {
+				return true
+			}
 		}
 	}
-	if token == "" {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return false
+	if !hasAnyToken {
+		return true
 	}
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
 	return false
@@ -461,7 +482,7 @@ func (pr *ProviderRouter) logLevelHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAnyAdminToken(w, r) {
 		return
 	}
 	var body struct {
@@ -533,7 +554,7 @@ func (pr *ProviderRouter) keysHandler(w http.ResponseWriter, r *http.Request) {
 	pool := ps.Pool
 
 	if r.Method == http.MethodPost || r.Method == http.MethodDelete {
-		if !pr.checkAdminToken(w, r) {
+		if !pr.checkAdminToken(w, r, ps.Name) {
 			return
 		}
 	}
@@ -604,7 +625,7 @@ func (pr *ProviderRouter) keysHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (pr *ProviderRouter) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAnyAdminToken(w, r) {
 		return
 	}
 
@@ -686,7 +707,7 @@ func (pr *ProviderRouter) dashboardHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (pr *ProviderRouter) clearHandler(w http.ResponseWriter, r *http.Request) {
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAnyAdminToken(w, r) {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -741,7 +762,7 @@ func (pr *ProviderRouter) statsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (pr *ProviderRouter) reloadHandler(w http.ResponseWriter, r *http.Request) {
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAnyAdminToken(w, r) {
 		return
 	}
 
@@ -794,6 +815,7 @@ func (pr *ProviderRouter) reloadHandler(w http.ResponseWriter, r *http.Request) 
 				Proxy:  state.proxy,
 				State:  state,
 			}
+			ApplyLogLevel(cfg.LogLevel)
 			pr.providers[name] = ps
 		}
 	}
@@ -805,26 +827,11 @@ func (pr *ProviderRouter) reloadHandler(w http.ResponseWriter, r *http.Request) 
 // loadKeysFromConfig loads API keys for a provider from the configured keys file
 // or the standard encrypted store. Returns nil if no keys can be loaded.
 func loadKeysFromConfig(name string, cfg *config.Config) (keys, names []string) {
-	// If a custom keys file is configured, load from it
-	if cfg.KeysFile != "" {
-		fileKeys, fileNames, err := keypool.LoadKeysFromFile(cfg.KeysFile)
-		if err == nil && fileKeys != nil {
-			return fileKeys, fileNames
-		}
-	}
-
-	// Fallback: try the standard encrypted store path: <XDG>/keys/<name>.enc
-	xdgPath, err := config.XDGConfigPath()
-	if err != nil {
+	keys, names, loaded := keypool.LoadKeysFromStore(name, cfg)
+	if !loaded {
 		return nil, nil
 	}
-	keyFile := filepath.Join(filepath.Dir(xdgPath), "keys", name+".enc")
-	fileKeys, fileNames, err := keypool.LoadKeysFromFile(keyFile)
-	if err == nil && fileKeys != nil {
-		return fileKeys, fileNames
-	}
-
-	return nil, nil
+	return keys, names
 }
 
 func (pr *ProviderRouter) disableKeyHandler(w http.ResponseWriter, r *http.Request) {
@@ -833,7 +840,7 @@ func (pr *ProviderRouter) disableKeyHandler(w http.ResponseWriter, r *http.Reque
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": errMsg})
 		return
 	}
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAdminToken(w, r, ps.Name) {
 		return
 	}
 
@@ -857,7 +864,7 @@ func (pr *ProviderRouter) enableKeyHandler(w http.ResponseWriter, r *http.Reques
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": errMsg})
 		return
 	}
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAdminToken(w, r, ps.Name) {
 		return
 	}
 
@@ -882,7 +889,7 @@ func (pr *ProviderRouter) cooldownKeyHandler(w http.ResponseWriter, r *http.Requ
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": errMsg})
 		return
 	}
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAdminToken(w, r, ps.Name) {
 		return
 	}
 
@@ -905,7 +912,7 @@ func (pr *ProviderRouter) deleteKeyHandler(w http.ResponseWriter, r *http.Reques
 		respondJSON(w, http.StatusNotFound, map[string]string{"error": errMsg})
 		return
 	}
-	if !pr.checkAdminToken(w, r) {
+	if !pr.checkAdminToken(w, r, ps.Name) {
 		return
 	}
 

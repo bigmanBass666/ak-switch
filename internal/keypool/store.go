@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"akswitch/internal/config"
 )
 
 // KeyEntry represents a persisted key entry with its metadata.
@@ -111,4 +114,25 @@ func SaveFullStore(path string, store *KeyStore) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
+}
+
+// LoadKeysFromStore loads API keys for a provider from the configured keys file
+// or the standard encrypted store. Returns loaded keys and whether keys were loaded.
+func LoadKeysFromStore(name string, cfg *config.Config) (keys, names []string, loaded bool) {
+	if cfg.KeysFile != "" {
+		fileKeys, fileNames, err := LoadKeysFromFile(cfg.KeysFile)
+		if err == nil && fileKeys != nil {
+			return fileKeys, fileNames, true
+		}
+	}
+	xdgPath, err := config.XDGConfigPath()
+	if err != nil {
+		return nil, nil, false
+	}
+	keyFile := filepath.Join(filepath.Dir(xdgPath), "keys", name+".enc")
+	fileKeys, fileNames, err := LoadKeysFromFile(keyFile)
+	if err == nil && fileKeys != nil {
+		return fileKeys, fileNames, true
+	}
+	return nil, nil, false
 }

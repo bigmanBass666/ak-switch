@@ -195,32 +195,18 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 
 // loadKeysForProvider loads API keys for a provider from its keys file or env.
 func loadKeysForProvider(name string, cfg *config.Config) (keys, names []string) {
-	keys = cfg.Keys
-	names = cfg.KeyNames
-
-	// If a custom keys file is configured and has keys, use it
-	if cfg.KeysFile != "" {
-		fileKeys, fileNames, err := keypool.LoadKeysFromFile(cfg.KeysFile)
-		if err == nil && fileKeys != nil {
-			return fileKeys, fileNames
-		}
-		if len(keys) > 0 {
-			_ = keypool.SaveKeysToFile(cfg.KeysFile, keys, names)
-			return keys, names
-		}
-	}
-
-	// Fallback: try the standard encrypted store path: <XDG>/keys/<name>.enc
-	xdgPath, err := config.XDGConfigPath()
-	if err != nil {
+	keys, names, loaded := keypool.LoadKeysFromStore(name, cfg)
+	if loaded {
 		return keys, names
 	}
-	keyFile := filepath.Join(filepath.Dir(xdgPath), "keys", name+".enc")
-	fileKeys, fileNames, err := keypool.LoadKeysFromFile(keyFile)
-	if err == nil && fileKeys != nil {
-		return fileKeys, fileNames
-	}
 
+	// Fallback: use configured keys
+	keys = cfg.Keys
+	names = cfg.KeyNames
+	// If KeysFile is configured and we have in-memory keys, persist them
+	if cfg.KeysFile != "" && len(keys) > 0 {
+		_ = keypool.SaveKeysToFile(cfg.KeysFile, keys, names)
+	}
 	return keys, names
 }
 
