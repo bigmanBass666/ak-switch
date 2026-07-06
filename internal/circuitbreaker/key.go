@@ -28,14 +28,24 @@ type KeyCircuitBreaker struct {
 	multiplier float64
 	backoffCap time.Duration
 	jitterFn   func(int) time.Duration // override for testing; nil = real random
+
+	authFailCount   int // consecutive auth failures (401/403)
+	permaThreshold  int // auth failures before permanent disable (0 = disable immediately)
 }
 
 // NewKeyCircuitBreaker creates a new KeyCircuitBreaker.
-func NewKeyCircuitBreaker(base, backoffCap time.Duration, multiplier float64) *KeyCircuitBreaker {
+// permaThreshold is the number of consecutive auth failures before permanent disable.
+// Use 0 to disable immediately (legacy behavior).
+func NewKeyCircuitBreaker(base, backoffCap time.Duration, multiplier float64, permaThreshold ...int) *KeyCircuitBreaker {
+	threshold := 0
+	if len(permaThreshold) > 0 && permaThreshold[0] > 0 {
+		threshold = permaThreshold[0]
+	}
 	return &KeyCircuitBreaker{
-		base:       base,
-		backoffCap: backoffCap,
-		multiplier: multiplier,
+		base:            base,
+		backoffCap:      backoffCap,
+		multiplier:      multiplier,
+		permaThreshold:  threshold,
 	}
 }
 
@@ -82,6 +92,26 @@ func (k *KeyCircuitBreaker) RecordFailure() time.Duration {
 	return cooldown
 }
 
+// RecordAuthFailure records an auth failure (401/403) and returns true if the key
+// should be permanently disabled (permaThreshold reached or zero = disable immediately).
+// The caller should call RecordPerma() when this returns true.
+func (k *KeyCircuitBreaker) RecordAuthFailure() bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	if k.state == StatePermanent {
+		return false
+	}
+	k.authFailCount++
+	if k.permaThreshold <= 0 || k.authFailCount >= k.permaThreshold {
+		return true
+	}
+	// Not yet at threshold; apply a brief cooldown so the key is skipped for a bit
+	k.state = StateOpen
+	k.cooldownUntil = time.Now().Add(10 * time.Second)
+	return false
+}
+
 // RecordPerma marks the key as permanently disabled (e.g., 401/403).
 func (k *KeyCircuitBreaker) RecordPerma(reason string) {
 	k.mu.Lock()
@@ -101,6 +131,7 @@ func (k *KeyCircuitBreaker) RecordSuccess() {
 	}
 	k.state = StateClosed
 	k.attempt = 0
+	k.authFailCount = 0
 	k.cooldownUntil = time.Time{}
 }
 
@@ -112,6 +143,7 @@ func (k *KeyCircuitBreaker) Reset() {
 	defer k.mu.Unlock()
 	k.state = StateClosed
 	k.attempt = 0
+	k.authFailCount = 0
 	k.cooldownUntil = time.Time{}
 	k.trippedReason = ""
 }
@@ -152,6 +184,13 @@ func (k *KeyCircuitBreaker) TrippedReason() string {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return k.trippedReason
+}
+
+// AuthFailCount returns the consecutive auth failure count.
+func (k *KeyCircuitBreaker) AuthFailCount() int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.authFailCount
 }
 
 // CooldownRemaining returns the remaining cooldown duration.

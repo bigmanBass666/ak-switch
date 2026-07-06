@@ -65,11 +65,12 @@ func NewProxyEngine(cfg *config.Config, numKeys int) *ProxyEngine {
 
 	return &ProxyEngine{
 		client: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: time.Duration(cfg.HTTPTimeoutSec) * time.Second,
 			Transport: &http.Transport{
-				MaxIdleConns:        100,
-				MaxIdleConnsPerHost: 10,
+				MaxIdleConns:        500,
+				MaxIdleConnsPerHost: 100,
 				IdleConnTimeout:     90 * time.Second,
+				ForceAttemptHTTP2:   true,
 			},
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse

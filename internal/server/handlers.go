@@ -231,7 +231,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		if err != nil {
 			switch categorizeError(0, err) {
 			case CatClientAbort:
-				slog.Warn("client aborted request", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "error", err)
+				slog.Debug("client aborted request", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "error", err)
 				return
 			default:
 				slog.Warn("key network error", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "error", err)
@@ -340,10 +340,14 @@ func (pr *ProviderRouter) handleAuthRejected(w http.ResponseWriter, ps *Provider
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	slog.Warn("key disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
 	pr.metrics.UpstreamErrors.WithLabelValues("auth_rejected").Inc()
-	pool.Disable(idx)
-	keyCBs[idx].RecordPerma("auth_rejected")
+	if keyCBs[idx].RecordAuthFailure() {
+		pool.Disable(idx)
+		keyCBs[idx].RecordPerma("auth_rejected")
+		slog.Warn("key permanently disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
+	} else {
+		slog.Warn("key auth failure", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "fail_count", keyCBs[idx].AuthFailCount())
+	}
 	if pool.ActiveCount() == 0 {
 		writeProxyError(w, http.StatusServiceUnavailable, ErrorAllKeysInvalid, fmt.Sprintf("%s 所有 Key 已失效或吊销", ps.Name))
 		pr.recordProxyMetrics(method, "5xx", "", start)
