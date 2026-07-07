@@ -12,8 +12,11 @@ import (
 )
 
 func init() {
+	logsCmd.Flags().IntVar(&logsLast, "last", 0, "Show only the last N entries (0 = all)")
 	rootCmd.AddCommand(logsCmd)
 }
+
+var logsLast int
 
 var logsCmd = &cobra.Command{
 	Use:   "logs",
@@ -49,6 +52,10 @@ var logsCmd = &cobra.Command{
 			return nil
 		}
 
+		if logsLast > 0 && len(entries) > logsLast {
+			entries = entries[len(entries)-logsLast:]
+		}
+
 		for _, entry := range entries {
 			entryMap, ok := entry.(map[string]interface{})
 			if !ok {
@@ -58,6 +65,9 @@ var logsCmd = &cobra.Command{
 			path := getStrField(entryMap, "url", "?")
 			status := getStrField(entryMap, "status", "?")
 			ts := getStrField(entryMap, "timestamp", "?")
+			if t, err := time.Parse(time.RFC3339, ts); err == nil {
+				ts = t.Format("15:04:05.000")
+			}
 
 			provider := getStrField(entryMap, "provider", "")
 			duration := getStrField(entryMap, "duration_ms", "")

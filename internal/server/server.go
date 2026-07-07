@@ -190,7 +190,14 @@ func ApplyLogLevel(level string) {
 		lvl = slog.LevelInfo
 	}
 	logLevel.Set(lvl)
-	slog.SetDefault(slog.New(newHandler(os.Stderr, &logLevel)))
+
+	stderrHandler := newHandler(os.Stderr, &logLevel)
+	if fileHandlerWriter != nil {
+		fileHandler := slog.NewTextHandler(fileHandlerWriter, &slog.HandlerOptions{Level: &logLevel})
+		slog.SetDefault(slog.New(&multiHandler{stderr: stderrHandler, file: fileHandler}))
+	} else {
+		slog.SetDefault(slog.New(stderrHandler))
+	}
 }
 
 // InitFileHandler initializes file-based logging with the given path and rotation settings.

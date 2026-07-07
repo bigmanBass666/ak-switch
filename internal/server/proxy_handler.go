@@ -153,18 +153,21 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 		// ── Response status dispatch ──
 		switch {
 		case resp.StatusCode == http.StatusTooManyRequests:
+			pr.logs.Append(buildLogEntry(ps, key, idx, r.Method, target, resp.StatusCode, len(bodyBytes), start, attempt))
 			if pr.handleRateLimited(w, ps, idx, resp, cfg, start, r.Method, target, bodyBytes) {
 				return
 			}
 			continue
 
 		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+			pr.logs.Append(buildLogEntry(ps, key, idx, r.Method, target, resp.StatusCode, len(bodyBytes), start, attempt))
 			if pr.handleAuthRejected(w, ps, idx, resp, start, r.Method, target, bodyBytes) {
 				return
 			}
 			continue
 
 		case resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusServiceUnavailable:
+			pr.logs.Append(buildLogEntry(ps, key, idx, r.Method, target, resp.StatusCode, len(bodyBytes), start, attempt))
 			pr.handleServerError(ps, idx, resp, attempt)
 			continue
 
@@ -173,6 +176,7 @@ func (pr *ProviderRouter) executeProxy(w http.ResponseWriter, r *http.Request, p
 			return
 
 		case resp.StatusCode >= 500:
+			pr.logs.Append(buildLogEntry(ps, key, idx, r.Method, target, resp.StatusCode, len(bodyBytes), start, attempt))
 			pr.handleServerError(ps, idx, resp, attempt)
 			continue
 
@@ -225,7 +229,7 @@ func (pr *ProviderRouter) handleRateLimited(w http.ResponseWriter, ps *ProviderS
 		}
 	}
 	pool.Cooldown(idx, cooldown)
-	slog.Warn("key rate limited", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_retry", keyCBs[idx].Attempt(), "body_preview", string(body))
+	slog.Warn("key rate limited", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "cb_state", fmt.Sprintf("%d", keyCBs[idx].State()), "cb_retry", keyCBs[idx].Attempt(), "body_preview", MaskSensitiveData(string(body), 1024))
 	pr.metrics.UpstreamErrors.WithLabelValues("rate_limited").Inc()
 
 	if keyCBs[idx].State() == circuitbreaker.StatePermanent {
@@ -251,7 +255,7 @@ func (pr *ProviderRouter) handleAuthRejected(w http.ResponseWriter, ps *Provider
 	if keyCBs[idx].RecordAuthFailure() {
 		pool.Disable(idx)
 		keyCBs[idx].RecordPerma("auth_rejected")
-		slog.Warn("key permanently disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
+		slog.Warn("key permanently disabled", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "body_preview", MaskSensitiveData(string(body), 1024))
 	} else {
 		slog.Warn("key auth failure", "provider", ps.Name, "key_index", idx, "key_name", pool.Name(idx), "status", resp.StatusCode, "fail_count", keyCBs[idx].AuthFailCount())
 	}
@@ -268,7 +272,7 @@ func (pr *ProviderRouter) handleAuthRejected(w http.ResponseWriter, ps *Provider
 func (pr *ProviderRouter) handleServerError(ps *ProviderState, idx int, resp *http.Response, attempt int) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
-	slog.Warn("upstream server error", "provider", ps.Name, "key_index", idx, "key_name", ps.Pool.Name(idx), "status", resp.StatusCode, "body_preview", string(body))
+	slog.Warn("upstream server error", "provider", ps.Name, "key_index", idx, "key_name", ps.Pool.Name(idx), "status", resp.StatusCode, "body_preview", MaskSensitiveData(string(body), 1024))
 	pr.metrics.UpstreamErrors.WithLabelValues("server_error").Inc()
 	ps.Proxy.upCB.RecordFailure()
 }
