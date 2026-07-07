@@ -48,14 +48,14 @@ func startServer(dashboardHTML string, providerFilter string, startAll bool) {
 	// ── Resolve providers, config, and selection strategy ──
 	router, providers, port, host, shouldStart := resolveProviders(dashboardHTML, providerFilter, startAll)
 
-	// ── Initialize each provider ─────────────────────
-	initProviders(router, providers, shouldStart, providerFilter)
-
 	// ── Initialize file logging (from first provider) ──
 	for _, cfg := range providers {
 		server.InitFileHandler(cfg.LogFile, cfg.LogMaxSize, cfg.LogMaxAge)
 		break
 	}
+
+	// ── Initialize each provider ─────────────────────
+	initProviders(router, providers, shouldStart, providerFilter)
 
 	// ── Start server ─────────────────────────────────
 	started := len(router.ProviderNames())
