@@ -47,6 +47,7 @@ func init() {
 	keyCmd.AddCommand(keyListCmd)
 	keyCmd.AddCommand(keyRemoveCmd)
 	keyCmd.AddCommand(keyDisableCmd)
+	keyCmd.AddCommand(keyEnableCmd)
 
 	keyAddCmd.Flags().StringP("name", "n", "", "Display name for the key")
 }
@@ -54,7 +55,7 @@ func init() {
 var keyCmd = &cobra.Command{
 	Use:   "key",
 	Short: "Manage API keys",
-	Long:  `Add, list, remove, and disable API keys for a provider.`,
+	Long:  `Add, list, remove, disable, and enable API keys for a provider.`,
 }
 
 var keyAddCmd = &cobra.Command{
@@ -259,6 +260,59 @@ Example:
 			desc += fmt.Sprintf(" (name: %s)", store.Keys[idx].Name)
 		}
 		fmt.Printf("Disabled key [%d] %s for provider %q\n", idx, desc, provider)
+		triggerReload()
+		return nil
+	},
+}
+var keyEnableCmd = &cobra.Command{
+	Use:   "enable <provider> <index>",
+	Short: "Enable an API key by index",
+	Long: `Re-enable a previously disabled API key at the specified index.
+
+The key will be used again for new requests.  The operation triggers a
+reload so the server picks up the change.
+
+Example:
+  akswitch key enable nvidia 1`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		provider := args[0]
+		idx, err := strconv.Atoi(args[1])
+		if err != nil {
+			return fmt.Errorf("invalid index %q: must be a non-negative integer", args[1])
+		}
+
+		setupEncryption()
+
+		path, err := keysPath(provider)
+		if err != nil {
+			return err
+		}
+
+		store, err := keypool.LoadFullStore(path)
+		if err != nil {
+			return fmt.Errorf("failed to load keys for %q: %w", provider, err)
+		}
+		if store == nil {
+			return fmt.Errorf("no keys found for provider %q", provider)
+		}
+
+		if idx < 0 || idx >= len(store.Keys) {
+			return fmt.Errorf("index %d out of range: provider %q has %d keys (valid: 0-%d)",
+				idx, provider, len(store.Keys), len(store.Keys)-1)
+		}
+
+		store.Keys[idx].Disabled = false
+
+		if err := keypool.SaveFullStore(path, store); err != nil {
+			return fmt.Errorf("failed to save keys for %q: %w", provider, err)
+		}
+
+		desc := utils.MaskKey(store.Keys[idx].Key)
+		if store.Keys[idx].Name != "" {
+			desc += fmt.Sprintf(" (name: %s)", store.Keys[idx].Name)
+		}
+		fmt.Printf("Enabled key [%d] %s for provider %q\n", idx, desc, provider)
 		triggerReload()
 		return nil
 	},

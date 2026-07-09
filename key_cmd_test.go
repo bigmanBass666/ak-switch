@@ -176,6 +176,72 @@ func TestKeyDisable_DisablesKey(t *testing.T) {
 	}
 }
 
+// TestKeyEnable_EnablesKey verifies that "akswitch key enable <provider> <index>"
+// re-enables a previously disabled key.
+func TestKeyEnable_EnablesKey(t *testing.T) {
+	cmd.ResetConfigEnv()
+	tmpDir := t.TempDir()
+	config.ConfigDir = tmpDir
+	t.Cleanup(func() { config.ConfigDir = "" })
+
+	xdgPath, err := config.XDGConfigPath()
+	if err != nil {
+		t.Fatalf("XDGConfigPath failed: %v", err)
+	}
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "enabletest",
+		"--target", "https://enabletest.api.com/v1",
+		"--port", "9506",
+	)
+
+	// Add a key, disable it, then enable it
+	cmd.RunCommand(t, "akswitch", "key", "add", "enabletest", "sk-enable-key-1")
+	cmd.RunCommand(t, "akswitch", "key", "disable", "enabletest", "0")
+	cmd.RunCommand(t, "akswitch", "key", "enable", "enabletest", "0")
+
+	// Verify key is enabled again
+	keysDir := filepath.Join(filepath.Dir(xdgPath), "keys")
+	keyFile := filepath.Join(keysDir, "enabletest.enc")
+	store, err := keypool.LoadFullStore(keyFile)
+	if err != nil {
+		t.Fatalf("LoadFullStore failed: %v", err)
+	}
+	if len(store.Keys) != 1 {
+		t.Fatalf("expected 1 key, got %d", len(store.Keys))
+	}
+	if store.Keys[0].Disabled {
+		t.Error("key should be enabled but Disabled = true")
+	}
+}
+
+// TestKeyEnable_InvalidIndex verifies that enabling with an out-of-range
+// index returns an error.
+func TestKeyEnable_InvalidIndex(t *testing.T) {
+	cmd.ResetConfigEnv()
+	tmpDir := t.TempDir()
+	config.ConfigDir = tmpDir
+	t.Cleanup(func() { config.ConfigDir = "" })
+
+	xdgPath, err := config.XDGConfigPath()
+	if err != nil {
+		t.Fatalf("XDGConfigPath failed: %v", err)
+	}
+	cmd.RunCommand(t, "akswitch", "config", "init", "-p", xdgPath)
+	cmd.RunCommand(t, "akswitch", "provider", "add", "enableerrtest",
+		"--target", "https://enableerrtest.api.com/v1",
+		"--port", "9507",
+	)
+	cmd.RunCommand(t, "akswitch", "key", "add", "enableerrtest", "sk-enable-err-key-1")
+
+	err = cmd.RunCommand(t, "akswitch", "key", "enable", "enableerrtest", "999")
+	if err == nil {
+		t.Fatal("expected error for out-of-range index, got nil")
+	}
+	if !strings.Contains(err.Error(), "out of range") {
+		t.Errorf("error message = %q, want it to contain 'out of range'", err.Error())
+	}
+}
+
 // TestKeyRemove_InvalidIndex verifies that removing with an out-of-range
 // index returns an error.
 func TestKeyRemove_InvalidIndex(t *testing.T) {

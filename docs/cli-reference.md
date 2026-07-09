@@ -96,6 +96,7 @@ akswitch key add <provider> <key> [--name <name>]    # 添加 Key
 akswitch key list <provider>                           # 列出 Key（脱敏显示）
 akswitch key remove <provider> <index>                 # 删除 Key
 akswitch key disable <provider> <index>                # 禁用 Key
+akswitch key enable <provider> <index>                 # 启用 Key
 ```
 
 - Key 以 AES-256-GCM 加密存储在 `keys/<provider>.enc`
