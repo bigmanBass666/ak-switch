@@ -10,7 +10,7 @@
 - 遵循 GitHub Flow + 原子 commit
 - 提交 PR 后在前台等 CI 绿
 
-### 前置检查清单（强制）
+### 提交前检查清单（强制）
 
 声明"完成"前必须逐条核查。**跳过任意一条 = 任务未完成。**
 
@@ -18,6 +18,9 @@
 2. **[测试]** — `go test ./...` 全量通过？
 3. **[手动验收]** — `go install` 后用真实二进制验证了行为？
 4. **[提交]** — 在正确的分支？提交信息清晰？
+
+### 提交后检查（强制）
+
 5. **[CI]** — 前台等到 CI 绿？
 
 ## 测试策略
@@ -45,3 +48,17 @@ akswitch 只专注于单 provider 内的 API key 轮转，不重复造 ccswitch 
 1. 先判断所属层级，加对应 `//go:build` 标签
 2. CLI 命令测试必须包含输出断言（`assertOutputContains` 或类似）
 3. 禁止无输出断言的 `runCommand` 模式（只测不崩不算测完）
+
+## Agent skills
+
+### Issue tracker
+
+Issue 使用 GitHub Issues 跟踪。外部 PR 不作为 triage 流程的需求来源。详见 `docs/agents/issue-tracker.md`。
+
+### Triage 标签
+
+五个标准角色全部使用默认标签名。详见 `docs/agents/triage-labels.md`。
+
+### 领域文档
+
+单上下文布局。详见 `docs/agents/domain.md`。
