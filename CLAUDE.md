@@ -45,3 +45,17 @@ akswitch 只专注于单 provider 内的 API key 轮转，不重复造 ccswitch 
 1. 先判断所属层级，加对应 `//go:build` 标签
 2. CLI 命令测试必须包含输出断言（`assertOutputContains` 或类似）
 3. 禁止无输出断言的 `runCommand` 模式（只测不崩不算测完）
+
+## Agent skills
+
+### Issue tracker
+
+Issue 使用 GitHub Issues 跟踪。外部 PR 不作为 triage 流程的需求来源。详见 `docs/agents/issue-tracker.md`。
+
+### Triage 标签
+
+五个标准角色全部使用默认标签名。详见 `docs/agents/triage-labels.md`。
+
+### 领域文档
+
+单上下文布局。详见 `docs/agents/domain.md`。
