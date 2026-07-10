@@ -221,11 +221,16 @@ func InitFileHandler(logFile string, maxSizeMB, maxAgeDays int) {
 	fileHandlerWriter = lj
 
 	fileHandler := slog.NewTextHandler(lj, &slog.HandlerOptions{Level: &logLevel})
-	currentHandler := slog.Default().Handler()
+
+	// Use a direct stderr handler instead of slog.Default().Handler()
+	// to avoid a circular dependency in Go 1.24+:
+	// slog.Default().Handler() writes to log.Writer(), which calls
+	// slog.Default().Handler() again → deadlock.
+	stderrHandler := slog.NewTextHandler(os.Stderr, nil)
 
 	// Wrap both into a multiHandler
 	slog.SetDefault(slog.New(&multiHandler{
-		stderr: currentHandler,
+		stderr: stderrHandler,
 		file:   fileHandler,
 	}))
 	slog.Info("file logging initialized", "path", logFile, "maxSizeMB", maxSizeMB, "maxAgeDays", maxAgeDays)
